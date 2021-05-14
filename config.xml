@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<config>
+    <gateways>
+        <gateway>
+            <host>127.0.0.1</host>
+            <port>8081</port>
+            <login>test</login>
+            <password>test_pwd</password>
+            <systemType>MCON1</systemType>
+            <interfaceVersion>1.0</interfaceVersion>
+            <sourceAddrAutodetect>false</sourceAddrAutodetect>
+            <sourceAddrTon>1</sourceAddrTon>
+            <sourceAddrNpi>0</sourceAddrNpi>
+            <validationPeriod>300</validationPeriod>
+            <transceiverMode>false</transceiverMode>
+            <receivePort>0</receivePort>
+            <enquireLinkInterval>300</enquireLinkInterval>
+            <waitAckExpire>0</waitAckExpire>
+            <maxPendingSubmits>300</maxPendingSubmits>
+            <throughput>10</throughput>
+            <useSsl>false</useSsl>
+            <sslClientCertKeyFile>0</sslClientCertKeyFile>
+        </gateway>
+    </gateways>
+</config>

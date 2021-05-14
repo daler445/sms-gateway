@@ -10,6 +10,10 @@ import org.springframework.web.bind.annotation.RestController;
 import tj.epic.sms.gateway.ws.application.actions.Action;
 import tj.epic.sms.gateway.ws.application.common.ErrorList;
 import tj.epic.sms.gateway.ws.application.exceptions.HttpBadRequestException;
+import tj.epic.sms.gateway.ws.application.exceptions.HttpInternalServerErrorException;
+import tj.epic.sms.gateway.ws.application.queue.Producer;
+import tj.epic.sms.gateway.ws.domain.exceptions.sms.CouldNotAcceptSmsException;
+import tj.epic.sms.gateway.ws.domain.modules.sms.SmsAcceptStatus;
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.body.BodyContainsInvalidCharactersException;
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.body.BodyIsTooBigException;
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.body.BodyIsTooSmallException;
@@ -23,6 +27,8 @@ import tj.epic.sms.gateway.ws.domain.modules.sms.Receiver.CheckReceiver;
 import tj.epic.sms.gateway.ws.domain.modules.sms.Receiver.Receiver;
 import tj.epic.sms.gateway.ws.domain.modules.sms.Sender.CheckSender;
 import tj.epic.sms.gateway.ws.domain.modules.sms.Sender.Sender;
+
+import java.util.HashMap;
 
 @RestController
 public class RetrieveSmsInGenericThreadAction extends Action {
@@ -47,14 +53,14 @@ public class RetrieveSmsInGenericThreadAction extends Action {
 	}
 
 	private ResponseEntity<JsonNode> action(String phoneNumber, String senderName, String messageBody, String gateway) {
-		Receiver receiver = null;
+		Receiver receiver;
 		try {
 			receiver = CheckReceiver.parse(phoneNumber);
 		} catch (BrokenPhoneNumberException e) {
 			throw new HttpBadRequestException(ErrorList.E0x00000f01);
 		}
 
-		Sender sender = null;
+		Sender sender;
 		try {
 			sender = CheckSender.parse(senderName);
 		} catch (BrokenSenderNameException e) {
@@ -65,7 +71,7 @@ public class RetrieveSmsInGenericThreadAction extends Action {
 			throw new HttpBadRequestException(ErrorList.E0x00000f04);
 		}
 
-		MessageBody body = null;
+		MessageBody body;
 		try {
 			body = CheckBody.parse(messageBody);
 		} catch (BodyIsTooSmallException e) {
@@ -76,6 +82,15 @@ public class RetrieveSmsInGenericThreadAction extends Action {
 			throw new HttpBadRequestException(ErrorList.E0x00000f07);
 		}
 
-		return this.respondWithData(200, "Accepted");
+		try {
+			SmsAcceptStatus responseData = Producer.send(receiver, sender, body, gateway);
+
+			HashMap<String, Object> response = new HashMap<>();
+			response.put("sms", responseData);
+			return this.respondWithData(200, response);
+		} catch (CouldNotAcceptSmsException e) {
+			e.printStackTrace();
+			throw new HttpInternalServerErrorException(ErrorList.E0x00000f08);
+		}
 	}
 }

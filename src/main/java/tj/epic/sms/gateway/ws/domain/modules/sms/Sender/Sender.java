@@ -3,6 +3,9 @@ package tj.epic.sms.gateway.ws.domain.modules.sms.Sender;
 public class Sender {
 	private String name;
 
+	public Sender() {
+	}
+
 	public Sender(String name) {
 		this.name = name;
 	}
