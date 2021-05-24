@@ -38,7 +38,7 @@ public class Receiver {
 	}
 
 	public String getNumber() {
-		return number;
+		return getCountryCode() + getFormattedNumber();
 	}
 
 	public void setRawValue(String rawValue) {

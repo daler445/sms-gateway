@@ -2,6 +2,8 @@ package tj.epic.sms.gateway.ws.application.queue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tj.epic.sms.gateway.ws.domain.exceptions.gateway.smpp.BindFailedException;
 import tj.epic.sms.gateway.ws.domain.exceptions.gateway.smpp.SmsSendingFailedException;
 import tj.epic.sms.gateway.ws.domain.modules.gateways.Config;
@@ -16,6 +18,7 @@ import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 public class Consumer {
+	public static Logger logger = LoggerFactory.getLogger(Consumer.class);
 	public static final String GLOBAL_QUEUE_NAME_LOCAL = "aster";
 	public static final String GLOBAL_QUEUE_NAME_EXTERNAL = "cody";
 
@@ -23,40 +26,14 @@ public class Consumer {
 		try {
 			declareQueue(config, "");
 		} catch (BindFailedException e) {
-			System.out.println("Bind failed for " + getQueueName(config));
-			e.printStackTrace();
+			logger.error("Could not bind [" + getQueueName(config) + "]");
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error("Could not bind [" + getQueueName(config) + "]", e);
 		}
-		/*System.out.println("Building consumer");
-
-		try {
-			ConnectionFactory factory = new ConnectionFactory();
-			factory.setHost("localhost");
-			Connection connection = factory.newConnection();
-			Channel channel = connection.createChannel();
-
-			channel.basicQos(config.getSmppConfig().getPreFetch());
-
-			channel.queueDeclare(getQueueName(config), false, false, false, null);
-
-			DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-				String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
-				System.out.println(" [x] Received '" + message + "'");
-			};
-
-			CancelCallback cancelCallback = (consumerTag) -> {
-				System.out.println(" [e][" + config.getSmppConfig().getQueueName() + "] Failed to send message '" + consumerTag + "'");
-			};
-
-			channel.basicConsume(getQueueName(config), true, deliverCallback, cancelCallback);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}*/
 	}
 
 	public static void buildMain(List<Config> configList) {
-		System.out.println("Building main consumer...");
+		logger.info("Building main consumer");
 
 		for (Config config : configList) {
 
@@ -69,64 +46,10 @@ public class Consumer {
 					declareQueue(config, GLOBAL_QUEUE_NAME_EXTERNAL);
 				}
 			} catch (BindFailedException e) {
-				System.out.println("Bind failed for " + getQueueName(config));
+				logger.error("Could not bind [" + getQueueName(config) + "]");
 			} catch (Exception e) {
-				e.printStackTrace();
+				logger.error("Could not bind [" + getQueueName(config) + "]", e);
 			}
-			/*
-			GatewayRepository gatewayRepository = new InNetworkSmppRepository();
-			try {
-				gatewayRepository.bind(config);
-			} catch (BindFailedException e) {
-				e.printStackTrace();
-				continue;
-			}
-			activeConnections++;
-
-			System.out.println("Building main queue for " + config.getSmppConfig().getQueueName());
-			ConnectionFactory factory = new ConnectionFactory();
-			factory.setHost("localhost");
-			try {
-				Connection connection = factory.newConnection();
-				Channel channel = connection.createChannel();
-
-				channel.basicQos(config.getSmppConfig().getPreFetch());
-
-				channel.queueDeclare(
-						(config.getSmppConfig().getType().equals(GatewayTypes.Local)) ? GLOBAL_QUEUE_NAME_LOCAL : GLOBAL_QUEUE_NAME_EXTERNAL,
-						false,
-						false,
-						false,
-						null
-				);
-
-				DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-					String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
-
-					ObjectMapper mapper = new ObjectMapper();
-					MessageBundle bundle = mapper.readValue(message, MessageBundle.class);
-
-					System.out.println(" [X][" + config.getSmppConfig().getQueueName() + "] Received message, should send to '" + bundle.getReceiver().getRawValue() + "' from " + bundle.getSender().getName());
-					try {
-						gatewayRepository.sendSms(bundle.getReceiver(), bundle.getSender(), bundle.getMessageBody());
-					} catch (SmsSendingFailedException e) {
-						e.printStackTrace();
-					}
-				};
-
-				CancelCallback cancelCallback = (consumerTag) -> {
-					System.out.println(" [E][" + config.getSmppConfig().getQueueName() + "] Failed to send message '" + consumerTag + "'");
-				};
-
-				channel.basicConsume(
-						(config.getSmppConfig().getType().equals(GatewayTypes.Local)) ? GLOBAL_QUEUE_NAME_LOCAL : GLOBAL_QUEUE_NAME_EXTERNAL,
-						true,
-						deliverCallback,
-						cancelCallback
-				);
-			} catch (Exception e) {
-				e.printStackTrace();
-			}*/
 		}
 	}
 
@@ -137,7 +60,7 @@ public class Consumer {
 		} else {
 			finalQueueName = queueName;
 		}
-		System.out.println(" [I] Building queue [" + finalQueueName + "] for " + getAlias(config));
+		logger.info("Building queue [" + finalQueueName + "] for " + getAlias(config));
 
 		GatewayRepository gatewayRepository = new InNetworkSmppRepository();
 
@@ -172,7 +95,7 @@ public class Consumer {
 				ObjectMapper mapper = new ObjectMapper();
 				MessageBundle bundle = mapper.readValue(message, MessageBundle.class);
 
-				System.out.println(" [x] [" + finalQueueName + "] [" + getAlias(config) + "] Received message, to '" + bundle.getReceiver().getRawValue() + "', from '" + bundle.getSender().getName() + "'");
+				logger.info("[" + finalQueueName + "] [" + getAlias(config) + "] Received message, to '" + bundle.getReceiver().getRawValue() + "', from '" + bundle.getSender().getName() + "'");
 				try {
 					gatewayRepository.sendSms(bundle.getReceiver(), bundle.getSender(), bundle.getMessageBody());
 				} catch (SmsSendingFailedException e) {
@@ -180,7 +103,7 @@ public class Consumer {
 				}
 			};
 
-			CancelCallback cancelCallback = (consumerTag) -> System.out.println(" [E][" + finalQueueName + "] Cancelled sending message");
+			CancelCallback cancelCallback = (consumerTag) -> logger.info("[" + finalQueueName + "] Cancelled sending message");
 
 			channel.basicConsume(
 					finalQueueName,
@@ -203,14 +126,14 @@ public class Consumer {
 
 	private static int getPreFetchCount(Config config) {
 		if (config.getConfigType().equals(Config.ConfigType.SMPP)) {
-			return config.getSmppConfig().getPreFetch();
+			return config.getSmppConfig().getPreFetchCount();
 		}
 		return 0;
 	}
 
 	private static GatewayTypes getGatewayType(Config config) {
 		if (config.getConfigType().equals(Config.ConfigType.SMPP)) {
-			return config.getSmppConfig().getType();
+			return config.getSmppConfig().getGatewayType();
 		}
 		return GatewayTypes.External;
 	}

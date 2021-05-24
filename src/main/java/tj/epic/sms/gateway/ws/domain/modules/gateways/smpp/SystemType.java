@@ -12,4 +12,5 @@ public enum SystemType {
 	MCON9,
 	ISO,
 	SINGLE,
+	NULL,
 }
