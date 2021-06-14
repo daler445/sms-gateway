@@ -100,10 +100,11 @@ public class SMPPConfig {
 				this.systemType = SystemType.SINGLE;
 				break;
 			case "null":
+			case "none":
 			case "":
-				this.systemType = SystemType.NULL;
 			default:
-				throw new IllegalArgumentException("System type must be one of [mcon1, mcon2, mcon3, mcon4, mcon5, mcon6, mcon7, mcon8, mcon9, iso, single, null]");
+				this.systemType = SystemType.NULL;
+				//throw new IllegalArgumentException("System type must be one of [mcon1, mcon2, mcon3, mcon4, mcon5, mcon6, mcon7, mcon8, mcon9, iso, single, [null, none]]");
 		}
 
 		switch (ESMMessageMode.toLowerCase()) {

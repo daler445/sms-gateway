@@ -16,6 +16,8 @@ import tj.epic.sms.gateway.ws.application.exceptions.HttpInternalServerErrorExce
 import tj.epic.sms.gateway.ws.application.queue.Consumer;
 import tj.epic.sms.gateway.ws.application.queue.Producer;
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.CouldNotAcceptSmsException;
+import tj.epic.sms.gateway.ws.domain.modules.sms.MessagePriority.CheckPriority;
+import tj.epic.sms.gateway.ws.domain.modules.sms.MessagePriority.MessagePriority;
 import tj.epic.sms.gateway.ws.domain.modules.sms.SmsAcceptStatus;
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.body.BodyContainsInvalidCharactersException;
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.body.BodyIsTooBigException;
@@ -33,6 +35,9 @@ import tj.epic.sms.gateway.ws.domain.modules.sms.Sender.Sender;
 
 import java.util.HashMap;
 
+/**
+ * @TODO add priority flag, 0 - lowest, 3 - highest 0 - use for bulk messaging
+ */
 @RestController
 public class RetrieveSmsAction extends Action {
 	private static final Logger logger = LoggerFactory.getLogger(RetrieveSmsAction.class);
@@ -44,7 +49,7 @@ public class RetrieveSmsAction extends Action {
 			@RequestParam(name = "_from") String senderName,
 			@RequestParam(name = "_text") String messageBody
 	) {
-		ResponseEntity<JsonNode> response = this.action(phoneNumber, senderName, messageBody, Consumer.GLOBAL_QUEUE_NAME_LOCAL);
+		ResponseEntity<JsonNode> response = this.action(phoneNumber, senderName, messageBody, Consumer.GLOBAL_QUEUE_NAME_LOCAL, "normal");
 		if (response.getStatusCode().is2xxSuccessful()) {
 			return "Success. SMS ID: xxxxxxxx";
 		}
@@ -56,9 +61,10 @@ public class RetrieveSmsAction extends Action {
 			@RequestParam(name = "receiver") String phoneNumber,
 			@RequestParam(name = "sender") String senderName,
 			@RequestParam(name = "text") String messageBody,
-			@RequestParam(name = "gateway", required = false, defaultValue = "") String gateway
+			@RequestParam(name = "gateway", required = false, defaultValue = "") String gateway,
+			@RequestParam(name = "priority", required = false, defaultValue = "normal") String priority
 	) {
-		return this.action(phoneNumber, senderName, messageBody, gateway);
+		return this.action(phoneNumber, senderName, messageBody, gateway, priority);
 	}
 
 	@RequestMapping(value = "/send", method = RequestMethod.POST, consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
@@ -66,12 +72,13 @@ public class RetrieveSmsAction extends Action {
 			@RequestParam(name = "receiver") String phoneNumber,
 			@RequestParam(name = "sender") String senderName,
 			@RequestParam(name = "text") String messageBody,
-			@RequestParam(name = "gateway", required = false, defaultValue = "auto") String gateway
+			@RequestParam(name = "gateway", required = false, defaultValue = "auto") String gateway,
+			@RequestParam(name = "priority", required = false, defaultValue = "normal") String priority
 	) {
-		return this.action(phoneNumber, senderName, messageBody, gateway);
+		return this.action(phoneNumber, senderName, messageBody, gateway, priority);
 	}
 
-	private ResponseEntity<JsonNode> action(String phoneNumber, String senderName, String messageBody, String gateway) {
+	private ResponseEntity<JsonNode> action(String phoneNumber, String senderName, String messageBody, String gateway, String priority) {
 		Receiver receiver;
 		try {
 			receiver = CheckReceiver.parse(phoneNumber);
@@ -108,9 +115,11 @@ public class RetrieveSmsAction extends Action {
 			throw new HttpBadRequestException(ErrorList.E0x00000f07);
 		}
 
+		MessagePriority messagePriority = CheckPriority.parse(priority);
+
 		try {
-			SmsAcceptStatus responseData = Producer.send(receiver, sender, body, gateway);
-			logger.info("SMS accepted: From [" + sender.getName() + "] to [" + receiver.getNumber() + "] via [" + gateway + "]");
+			SmsAcceptStatus responseData = Producer.send(receiver, sender, body, gateway, messagePriority);
+			logger.info("SMS accepted: From [" + sender.getName() + "] to [" + receiver.getNumber() + "] via [" + gateway + "] priority [" + messagePriority.getPriorityText() + "]");
 
 			HashMap<String, Object> response = new HashMap<>();
 			response.put("sms", responseData);

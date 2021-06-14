@@ -7,7 +7,7 @@ public class MessageBody {
 	}
 
 	public MessageBody(String body) {
-		this.body = body;
+		this.body = body.trim();
 	}
 
 	public String getBody() {
@@ -15,6 +15,6 @@ public class MessageBody {
 	}
 
 	public void setBody(String body) {
-		this.body = body;
+		this.body = body.trim();
 	}
 }

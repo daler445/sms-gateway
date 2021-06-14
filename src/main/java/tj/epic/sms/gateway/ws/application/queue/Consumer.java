@@ -95,9 +95,9 @@ public class Consumer {
 				ObjectMapper mapper = new ObjectMapper();
 				MessageBundle bundle = mapper.readValue(message, MessageBundle.class);
 
-				logger.info("[" + finalQueueName + "] [" + getAlias(config) + "] Received message, to '" + bundle.getReceiver().getRawValue() + "', from '" + bundle.getSender().getName() + "'");
+				logger.info("[" + finalQueueName + "] [" + getAlias(config) + "] Received message, to '" + bundle.getReceiver().getRawValue() + "', from '" + bundle.getSender().getName() + "', priority " + bundle.getMessagePriority().getPriorityText());
 				try {
-					gatewayRepository.sendSms(bundle.getReceiver(), bundle.getSender(), bundle.getMessageBody());
+					gatewayRepository.sendSms(bundle.getReceiver(), bundle.getSender(), bundle.getMessageBody(), bundle.getMessagePriority());
 				} catch (SmsSendingFailedException e) {
 					e.printStackTrace();
 				}

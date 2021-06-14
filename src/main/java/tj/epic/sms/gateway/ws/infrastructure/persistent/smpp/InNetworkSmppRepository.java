@@ -16,6 +16,7 @@ import tj.epic.sms.gateway.ws.domain.exceptions.gateway.smpp.SmsSendingFailedExc
 import tj.epic.sms.gateway.ws.domain.modules.gateways.Config;
 import tj.epic.sms.gateway.ws.domain.modules.gateways.GatewayRepository;
 import tj.epic.sms.gateway.ws.domain.modules.sms.Body.MessageBody;
+import tj.epic.sms.gateway.ws.domain.modules.sms.MessagePriority.MessagePriority;
 import tj.epic.sms.gateway.ws.domain.modules.sms.Receiver.Receiver;
 import tj.epic.sms.gateway.ws.domain.modules.sms.Sender.Sender;
 
@@ -45,7 +46,7 @@ public class InNetworkSmppRepository implements GatewayRepository {
 								this.config.getSmppConfig().getBindType().get(),
 								this.config.getSmppConfig().getLogin(),
 								this.config.getSmppConfig().getPassword(),
-								(!this.config.getSmppConfig().getSystemType().toString().equals("null")) ? this.config.getSmppConfig().getSystemType().toString() : null,
+								"EPIC_SG",
 								this.config.getSmppConfig().getDestinationAddrTon().get(),
 								this.config.getSmppConfig().getDestinationAddrNpi().get(),
 								null
@@ -61,7 +62,7 @@ public class InNetworkSmppRepository implements GatewayRepository {
 	}
 
 	@Override
-	public void sendSms(Receiver receiver, Sender sender, MessageBody messageBody) throws SmsSendingFailedException {
+	public void sendSms(Receiver receiver, Sender sender, MessageBody messageBody, MessagePriority messagePriority) throws SmsSendingFailedException {
 		if (isBound) {
 			String messageId;
 			try {
@@ -97,13 +98,22 @@ public class InNetworkSmppRepository implements GatewayRepository {
 				long t = date.getTimeInMillis();
 				Date scheduleDeliveryTime = new Date(t + 3000);
 
+				boolean containsUnicodeCharacters = containsUnicodeCharacters(messageBody.getBody());
+
+				byte[] messageBodyBytes;
+				if (containsUnicodeCharacters) {
+					messageBodyBytes = messageBody.getBody().getBytes(StandardCharsets.UTF_16);
+				} else {
+					messageBodyBytes = messageBody.getBody().getBytes(StandardCharsets.UTF_8);
+				}
+
 				messageId = session.submitShortMessage(
 						"",
 						this.config.getSmppConfig().getSourceAddrTon().get(),
 						this.config.getSmppConfig().getSourceAddrNpi().get(),
 						sender.getName(),
-						this.config.getSmppConfig().getSourceAddrTon().get(),
-						this.config.getSmppConfig().getSourceAddrNpi().get(),
+						this.config.getSmppConfig().getDestinationAddrTon().get(),
+						this.config.getSmppConfig().getDestinationAddrNpi().get(),
 						receiver.getNumber(),
 						new ESMClass(
 								this.config.getSmppConfig().getESMMessageMode().get(),
@@ -111,14 +121,17 @@ public class InNetworkSmppRepository implements GatewayRepository {
 								this.config.getSmppConfig().getESMGSMSpecificFeature().get()
 						),
 						(byte) this.config.getSmppConfig().getProtocolId(), // protocol id
-						(byte) 3, // priority @TODO take dynamically from message param
-						TIME_FORMATTER.format(scheduleDeliveryTime),
+						(byte) messagePriority.getPriorityCode(), // priority
+						null, //TIME_FORMATTER.format(scheduleDeliveryTime),
+
 						null,
 						new RegisteredDelivery(SMSCDeliveryReceipt.SUCCESS_FAILURE),
 						(this.config.getSmppConfig().isReplacePending()) ? (byte) 1 : (byte) 0, // replace if presents flag
-						new GeneralDataCoding(Alphabet.ALPHA_CYRILLIC),
+						new GeneralDataCoding(
+								(containsUnicodeCharacters) ? Alphabet.ALPHA_UCS2 : Alphabet.ALPHA_DEFAULT
+						),
 						(byte) 0, // sms default msg id
-						messageBody.getBody().getBytes(StandardCharsets.UTF_8)
+						messageBodyBytes
 				);
 			} catch (IOException | InvalidResponseException | NegativeResponseException | ResponseTimeoutException | PDUException e) {
 				logger.error("SMS sending failed: " + e.getMessage());
@@ -133,5 +146,14 @@ public class InNetworkSmppRepository implements GatewayRepository {
 			logger.error("Not bound");
 			throw new SmsSendingFailedException();
 		}
+	}
+
+	private boolean containsUnicodeCharacters(String needle) {
+		for (int i = 0; i < needle.length(); i++) {
+			int c = (int) needle.charAt(i);
+			if (c < 32 || c > 126)
+				return true;
+		}
+		return false;
 	}
 }
