@@ -7,17 +7,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tj.epic.sms.gateway.ws.application.common.Helpers;
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.CouldNotAcceptSmsException;
-import tj.epic.sms.gateway.ws.domain.modules.sms.MessagePriority.MessagePriority;
+import tj.epic.sms.gateway.ws.domain.modules.sms.priority.MessagePriority;
 import tj.epic.sms.gateway.ws.domain.modules.sms.SmsAcceptStatus;
-import tj.epic.sms.gateway.ws.domain.modules.sms.Body.MessageBody;
+import tj.epic.sms.gateway.ws.domain.modules.sms.body.MessageBody;
 import tj.epic.sms.gateway.ws.domain.modules.sms.MessageBundle;
-import tj.epic.sms.gateway.ws.domain.modules.sms.Receiver.Receiver;
-import tj.epic.sms.gateway.ws.domain.modules.sms.Sender.Sender;
+import tj.epic.sms.gateway.ws.domain.modules.sms.receiver.Receiver;
+import tj.epic.sms.gateway.ws.domain.modules.sms.schedule.MessageSchedule;
+import tj.epic.sms.gateway.ws.domain.modules.sms.sender.Sender;
 
 public class Producer {
 	public static Logger logger = LoggerFactory.getLogger(Producer.class);
 
-	public static SmsAcceptStatus send(Receiver receiver, Sender sender, MessageBody messageBody, String gateway, MessagePriority priority) throws CouldNotAcceptSmsException {
+	public static SmsAcceptStatus send(Receiver receiver, Sender sender, MessageBody messageBody, String gateway, MessagePriority priority, MessageSchedule messageSchedule) throws CouldNotAcceptSmsException {
 		if (gateway == null || gateway.equals("")) {
 			if (!receiver.getCountryCode().equals("992")) {
 				gateway = Consumer.GLOBAL_QUEUE_NAME_EXTERNAL;
@@ -32,7 +33,7 @@ public class Producer {
 				Connection connection = factory.newConnection();
 				Channel channel = connection.createChannel()
 		) {
-			MessageBundle bundle = new MessageBundle(receiver, sender, messageBody, priority);
+			MessageBundle bundle = new MessageBundle(receiver, sender, messageBody, priority, messageSchedule);
 			String message = Helpers.objectToJson(bundle);
 
 			channel.queueDeclare(gateway, false, false, false, null);

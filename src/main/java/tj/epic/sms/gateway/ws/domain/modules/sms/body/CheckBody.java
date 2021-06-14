@@ -1,4 +1,4 @@
-package tj.epic.sms.gateway.ws.domain.modules.sms.Body;
+package tj.epic.sms.gateway.ws.domain.modules.sms.body;
 
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.body.BodyContainsInvalidCharactersException;
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.body.BodyIsTooBigException;

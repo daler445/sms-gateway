@@ -16,8 +16,8 @@ import tj.epic.sms.gateway.ws.application.exceptions.HttpInternalServerErrorExce
 import tj.epic.sms.gateway.ws.application.queue.Consumer;
 import tj.epic.sms.gateway.ws.application.queue.Producer;
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.CouldNotAcceptSmsException;
-import tj.epic.sms.gateway.ws.domain.modules.sms.MessagePriority.CheckPriority;
-import tj.epic.sms.gateway.ws.domain.modules.sms.MessagePriority.MessagePriority;
+import tj.epic.sms.gateway.ws.domain.modules.sms.priority.CheckPriority;
+import tj.epic.sms.gateway.ws.domain.modules.sms.priority.MessagePriority;
 import tj.epic.sms.gateway.ws.domain.modules.sms.SmsAcceptStatus;
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.body.BodyContainsInvalidCharactersException;
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.body.BodyIsTooBigException;
@@ -26,18 +26,17 @@ import tj.epic.sms.gateway.ws.domain.exceptions.sms.receiver.BrokenPhoneNumberEx
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.sender.BrokenSenderNameException;
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.sender.SenderNameIsTooBigException;
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.sender.SenderNameIsTooSmallException;
-import tj.epic.sms.gateway.ws.domain.modules.sms.Body.CheckBody;
-import tj.epic.sms.gateway.ws.domain.modules.sms.Body.MessageBody;
-import tj.epic.sms.gateway.ws.domain.modules.sms.Receiver.CheckReceiver;
-import tj.epic.sms.gateway.ws.domain.modules.sms.Receiver.Receiver;
-import tj.epic.sms.gateway.ws.domain.modules.sms.Sender.CheckSender;
-import tj.epic.sms.gateway.ws.domain.modules.sms.Sender.Sender;
+import tj.epic.sms.gateway.ws.domain.modules.sms.body.CheckBody;
+import tj.epic.sms.gateway.ws.domain.modules.sms.body.MessageBody;
+import tj.epic.sms.gateway.ws.domain.modules.sms.receiver.CheckReceiver;
+import tj.epic.sms.gateway.ws.domain.modules.sms.receiver.Receiver;
+import tj.epic.sms.gateway.ws.domain.modules.sms.schedule.MessageSchedule;
+import tj.epic.sms.gateway.ws.domain.modules.sms.sender.CheckSender;
+import tj.epic.sms.gateway.ws.domain.modules.sms.sender.Sender;
 
+import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 
-/**
- * @TODO add priority flag, 0 - lowest, 3 - highest 0 - use for bulk messaging
- */
 @RestController
 public class RetrieveSmsAction extends Action {
 	private static final Logger logger = LoggerFactory.getLogger(RetrieveSmsAction.class);
@@ -49,7 +48,7 @@ public class RetrieveSmsAction extends Action {
 			@RequestParam(name = "_from") String senderName,
 			@RequestParam(name = "_text") String messageBody
 	) {
-		ResponseEntity<JsonNode> response = this.action(phoneNumber, senderName, messageBody, Consumer.GLOBAL_QUEUE_NAME_LOCAL, "normal");
+		ResponseEntity<JsonNode> response = this.action(phoneNumber, senderName, messageBody, Consumer.GLOBAL_QUEUE_NAME_LOCAL, "normal", "now");
 		if (response.getStatusCode().is2xxSuccessful()) {
 			return "Success. SMS ID: xxxxxxxx";
 		}
@@ -62,9 +61,10 @@ public class RetrieveSmsAction extends Action {
 			@RequestParam(name = "sender") String senderName,
 			@RequestParam(name = "text") String messageBody,
 			@RequestParam(name = "gateway", required = false, defaultValue = "") String gateway,
-			@RequestParam(name = "priority", required = false, defaultValue = "normal") String priority
+			@RequestParam(name = "priority", required = false, defaultValue = "normal") String priority,
+			@RequestParam(name = "schedule", required = false, defaultValue = "now") String schedule
 	) {
-		return this.action(phoneNumber, senderName, messageBody, gateway, priority);
+		return this.action(phoneNumber, senderName, messageBody, gateway, priority, schedule);
 	}
 
 	@RequestMapping(value = "/send", method = RequestMethod.POST, consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
@@ -73,12 +73,13 @@ public class RetrieveSmsAction extends Action {
 			@RequestParam(name = "sender") String senderName,
 			@RequestParam(name = "text") String messageBody,
 			@RequestParam(name = "gateway", required = false, defaultValue = "auto") String gateway,
-			@RequestParam(name = "priority", required = false, defaultValue = "normal") String priority
+			@RequestParam(name = "priority", required = false, defaultValue = "normal") String priority,
+			@RequestParam(name = "schedule", required = false, defaultValue = "now") String schedule
 	) {
-		return this.action(phoneNumber, senderName, messageBody, gateway, priority);
+		return this.action(phoneNumber, senderName, messageBody, gateway, priority, schedule);
 	}
 
-	private ResponseEntity<JsonNode> action(String phoneNumber, String senderName, String messageBody, String gateway, String priority) {
+	private ResponseEntity<JsonNode> action(String phoneNumber, String senderName, String messageBody, String gateway, String priority, String schedule) {
 		Receiver receiver;
 		try {
 			receiver = CheckReceiver.parse(phoneNumber);
@@ -117,9 +118,18 @@ public class RetrieveSmsAction extends Action {
 
 		MessagePriority messagePriority = CheckPriority.parse(priority);
 
+		MessageSchedule messageSchedule = new MessageSchedule("now");
 		try {
-			SmsAcceptStatus responseData = Producer.send(receiver, sender, body, gateway, messagePriority);
-			logger.info("SMS accepted: From [" + sender.getName() + "] to [" + receiver.getNumber() + "] via [" + gateway + "] priority [" + messagePriority.getPriorityText() + "]");
+			if (!schedule.equals("now")) {
+				messageSchedule = new MessageSchedule(schedule);
+			}
+		} catch (DateTimeParseException e) {
+			logger.warn("Incorrect date time format for schedule provided, using current time", e);
+		}
+
+		try {
+			SmsAcceptStatus responseData = Producer.send(receiver, sender, body, gateway, messagePriority, messageSchedule);
+			logger.info("SMS accepted: From [" + sender.getName() + "] to [" + receiver.getNumber() + "] via [" + gateway + "] priority [" + messagePriority.getPriorityText() + "] on [" + messageSchedule.getDateTime() + "]");
 
 			HashMap<String, Object> response = new HashMap<>();
 			response.put("sms", responseData);

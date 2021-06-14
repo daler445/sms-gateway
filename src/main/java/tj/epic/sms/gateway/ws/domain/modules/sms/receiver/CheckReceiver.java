@@ -1,4 +1,4 @@
-package tj.epic.sms.gateway.ws.domain.modules.sms.Receiver;
+package tj.epic.sms.gateway.ws.domain.modules.sms.receiver;
 
 import com.google.i18n.phonenumbers.NumberParseException;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;

@@ -1,4 +1,4 @@
-package tj.epic.sms.gateway.ws.domain.modules.sms.Sender;
+package tj.epic.sms.gateway.ws.domain.modules.sms.sender;
 
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.sender.BrokenSenderNameException;
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.sender.SenderNameIsTooBigException;

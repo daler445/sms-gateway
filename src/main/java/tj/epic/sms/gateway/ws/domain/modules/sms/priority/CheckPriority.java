@@ -1,4 +1,4 @@
-package tj.epic.sms.gateway.ws.domain.modules.sms.MessagePriority;
+package tj.epic.sms.gateway.ws.domain.modules.sms.priority;
 
 public class CheckPriority {
 	public static MessagePriority parse(String priority) {

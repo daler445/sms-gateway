@@ -1,4 +1,4 @@
-package tj.epic.sms.gateway.ws.domain.modules.sms.Sender;
+package tj.epic.sms.gateway.ws.domain.modules.sms.sender;
 
 public class Sender {
 	private String name;

@@ -1,24 +1,27 @@
 package tj.epic.sms.gateway.ws.domain.modules.sms;
 
-import tj.epic.sms.gateway.ws.domain.modules.sms.Body.MessageBody;
-import tj.epic.sms.gateway.ws.domain.modules.sms.MessagePriority.MessagePriority;
-import tj.epic.sms.gateway.ws.domain.modules.sms.Receiver.Receiver;
-import tj.epic.sms.gateway.ws.domain.modules.sms.Sender.Sender;
+import tj.epic.sms.gateway.ws.domain.modules.sms.body.MessageBody;
+import tj.epic.sms.gateway.ws.domain.modules.sms.priority.MessagePriority;
+import tj.epic.sms.gateway.ws.domain.modules.sms.receiver.Receiver;
+import tj.epic.sms.gateway.ws.domain.modules.sms.schedule.MessageSchedule;
+import tj.epic.sms.gateway.ws.domain.modules.sms.sender.Sender;
 
 public class MessageBundle {
 	private Receiver receiver;
 	private Sender sender;
 	private MessageBody messageBody;
 	private MessagePriority messagePriority;
+	private MessageSchedule messageSchedule;
 
 	public MessageBundle() {
 	}
 
-	public MessageBundle(Receiver receiver, Sender sender, MessageBody messageBody, MessagePriority messagePriority) {
+	public MessageBundle(Receiver receiver, Sender sender, MessageBody messageBody, MessagePriority messagePriority, MessageSchedule messageSchedule) {
 		this.receiver = receiver;
 		this.sender = sender;
 		this.messageBody = messageBody;
 		this.messagePriority = messagePriority;
+		this.messageSchedule = messageSchedule;
 	}
 
 	public Receiver getReceiver() {
@@ -51,5 +54,13 @@ public class MessageBundle {
 
 	public void setMessagePriority(MessagePriority messagePriority) {
 		this.messagePriority = messagePriority;
+	}
+
+	public MessageSchedule getMessageSchedule() {
+		return messageSchedule;
+	}
+
+	public void setMessageSchedule(MessageSchedule messageSchedule) {
+		this.messageSchedule = messageSchedule;
 	}
 }

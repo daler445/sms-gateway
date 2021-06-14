@@ -1,4 +1,4 @@
-package tj.epic.sms.gateway.ws.domain.modules.sms.MessagePriority;
+package tj.epic.sms.gateway.ws.domain.modules.sms.priority;
 
 public enum MessagePriority {
 	BULK(0),

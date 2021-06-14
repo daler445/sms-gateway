@@ -11,17 +11,23 @@ import org.jsmpp.util.InvalidDeliveryReceiptException;
 import org.jsmpp.util.TimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.format.annotation.DateTimeFormat;
 import tj.epic.sms.gateway.ws.domain.exceptions.gateway.smpp.BindFailedException;
 import tj.epic.sms.gateway.ws.domain.exceptions.gateway.smpp.SmsSendingFailedException;
 import tj.epic.sms.gateway.ws.domain.modules.gateways.Config;
 import tj.epic.sms.gateway.ws.domain.modules.gateways.GatewayRepository;
-import tj.epic.sms.gateway.ws.domain.modules.sms.Body.MessageBody;
-import tj.epic.sms.gateway.ws.domain.modules.sms.MessagePriority.MessagePriority;
-import tj.epic.sms.gateway.ws.domain.modules.sms.Receiver.Receiver;
-import tj.epic.sms.gateway.ws.domain.modules.sms.Sender.Sender;
+import tj.epic.sms.gateway.ws.domain.modules.sms.body.MessageBody;
+import tj.epic.sms.gateway.ws.domain.modules.sms.priority.MessagePriority;
+import tj.epic.sms.gateway.ws.domain.modules.sms.receiver.Receiver;
+import tj.epic.sms.gateway.ws.domain.modules.sms.schedule.MessageSchedule;
+import tj.epic.sms.gateway.ws.domain.modules.sms.sender.Sender;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
 import java.util.Calendar;
 import java.util.Date;
 
@@ -62,7 +68,7 @@ public class InNetworkSmppRepository implements GatewayRepository {
 	}
 
 	@Override
-	public void sendSms(Receiver receiver, Sender sender, MessageBody messageBody, MessagePriority messagePriority) throws SmsSendingFailedException {
+	public void sendSms(Receiver receiver, Sender sender, MessageBody messageBody, MessagePriority messagePriority, MessageSchedule messageSchedule) throws SmsSendingFailedException {
 		if (isBound) {
 			String messageId;
 			try {
@@ -96,7 +102,15 @@ public class InNetworkSmppRepository implements GatewayRepository {
 
 				Calendar date = Calendar.getInstance();
 				long t = date.getTimeInMillis();
-				Date scheduleDeliveryTime = new Date(t + 3000);
+
+				//Date scheduleDeliveryTime = new Date(t + 3000);
+
+				Date scheduleDate = new Date();
+				if (messageSchedule.isScheduleSending()) {
+					Instant instant = messageSchedule.getDateTimeObj().atZone(ZoneId.systemDefault()).toInstant();
+					scheduleDate = Date.from(instant);
+				}
+
 
 				boolean containsUnicodeCharacters = containsUnicodeCharacters(messageBody.getBody());
 
@@ -122,7 +136,8 @@ public class InNetworkSmppRepository implements GatewayRepository {
 						),
 						(byte) this.config.getSmppConfig().getProtocolId(), // protocol id
 						(byte) messagePriority.getPriorityCode(), // priority
-						null, //TIME_FORMATTER.format(scheduleDeliveryTime),
+						(messageSchedule.isScheduleSending()) ? TIME_FORMATTER.format(scheduleDate) : null,
+						//null, //TIME_FORMATTER.format(scheduleDeliveryTime),
 
 						null,
 						new RegisteredDelivery(SMSCDeliveryReceipt.SUCCESS_FAILURE),

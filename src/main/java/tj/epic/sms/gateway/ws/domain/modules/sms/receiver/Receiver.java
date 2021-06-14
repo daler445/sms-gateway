@@ -1,4 +1,4 @@
-package tj.epic.sms.gateway.ws.domain.modules.sms.Receiver;
+package tj.epic.sms.gateway.ws.domain.modules.sms.receiver;
 
 import tj.epic.sms.gateway.ws.domain.modules.sms.GatewayTypes;
 

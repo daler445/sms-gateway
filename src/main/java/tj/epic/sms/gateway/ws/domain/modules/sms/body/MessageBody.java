@@ -1,4 +1,4 @@
-package tj.epic.sms.gateway.ws.domain.modules.sms.Body;
+package tj.epic.sms.gateway.ws.domain.modules.sms.body;
 
 public class MessageBody {
 	private String body;

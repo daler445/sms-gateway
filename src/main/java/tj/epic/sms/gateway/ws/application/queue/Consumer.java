@@ -97,7 +97,7 @@ public class Consumer {
 
 				logger.info("[" + finalQueueName + "] [" + getAlias(config) + "] Received message, to '" + bundle.getReceiver().getRawValue() + "', from '" + bundle.getSender().getName() + "', priority " + bundle.getMessagePriority().getPriorityText());
 				try {
-					gatewayRepository.sendSms(bundle.getReceiver(), bundle.getSender(), bundle.getMessageBody(), bundle.getMessagePriority());
+					gatewayRepository.sendSms(bundle.getReceiver(), bundle.getSender(), bundle.getMessageBody(), bundle.getMessagePriority(), bundle.getMessageSchedule());
 				} catch (SmsSendingFailedException e) {
 					e.printStackTrace();
 				}
