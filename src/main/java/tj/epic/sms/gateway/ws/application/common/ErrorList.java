@@ -1,6 +1,7 @@
 package tj.epic.sms.gateway.ws.application.common;
 
 public enum ErrorList {
+	E0x00000f00("0x00000f00", "Error not found"),
 	E0x00000f01("0x00000f01", "Broken receiver phone number provided"),
 	E0x00000f02("0x00000f02", "Broken sender name provided"),
 	E0x00000f03("0x00000f03", "Sender name must be at least 3 characters"),
@@ -25,5 +26,14 @@ public enum ErrorList {
 
 	public String getErrorDescription() {
 		return errorDescription;
+	}
+
+	public static ErrorList getErrorFromCode(String code) {
+		for (ErrorList error : ErrorList.values()) {
+			if (error.errorCode.equals(code)) {
+				return error;
+			}
+		}
+		return ErrorList.E0x00000f00;
 	}
 }

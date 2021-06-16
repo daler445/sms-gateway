@@ -35,6 +35,8 @@ import tj.epic.sms.gateway.ws.domain.modules.sms.sender.CheckSender;
 import tj.epic.sms.gateway.ws.domain.modules.sms.sender.Sender;
 
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 
 @RestController
@@ -77,6 +79,45 @@ public class RetrieveSmsAction extends Action {
 			@RequestParam(name = "schedule", required = false, defaultValue = "now") String schedule
 	) {
 		return this.action(phoneNumber, senderName, messageBody, gateway, priority, schedule);
+	}
+
+	@RequestMapping(value = "/sendMultiple", method = RequestMethod.POST, consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+	public ResponseEntity<JsonNode> retrieveMultiplePOST(
+			@RequestParam(name = "receivers") String phoneNumbers,
+			@RequestParam(name = "sender") String senderName,
+			@RequestParam(name = "text") String messageBody,
+			@RequestParam(name = "gateway", required = false, defaultValue = "auto") String gateway,
+			@RequestParam(name = "priority", required = false, defaultValue = "normal") String priority,
+			@RequestParam(name = "schedule", required = false, defaultValue = "now") String schedule
+	) {
+
+		MultipleAcceptStatus rejectedStatus = new MultipleAcceptStatus();
+		MultipleAcceptStatus acceptedStatus = new MultipleAcceptStatus();
+
+		String[] phoneNumberList = phoneNumbers.split(";");
+
+		// remove duplicates
+		phoneNumberList = Arrays.stream(phoneNumberList).distinct().toArray(String[]::new);
+
+		for(String phoneNumber : phoneNumberList) {
+			try {
+				this.action(phoneNumber, senderName, messageBody, gateway, priority, schedule);
+				acceptedStatus.addNewPhone(phoneNumber);
+			} catch (HttpInternalServerErrorException|HttpBadRequestException e) {
+				if (!e.getCode().equals(ErrorList.E0x00000f01.getErrorCode())) {
+					throw new HttpBadRequestException(ErrorList.getErrorFromCode(e.getCode()));
+				}
+				rejectedStatus.addNewPhone(phoneNumber);
+			}
+		}
+
+		HashMap<String, Object> response = new HashMap<>();
+		response.put("sender", senderName);
+		response.put("gateway", gateway);
+		response.put("rejected", rejectedStatus);
+		response.put("accepted", acceptedStatus);
+
+		return this.respondWithData(200, response);
 	}
 
 	private ResponseEntity<JsonNode> action(String phoneNumber, String senderName, String messageBody, String gateway, String priority, String schedule) {
@@ -137,6 +178,29 @@ public class RetrieveSmsAction extends Action {
 		} catch (CouldNotAcceptSmsException e) {
 			logger.error("Could not accept sms: " + e.getMessage());
 			throw new HttpInternalServerErrorException(ErrorList.E0x00000f08);
+		}
+	}
+
+	private static class MultipleAcceptStatus {
+		private int count;
+		private final ArrayList<String> phoneNumbers;
+
+		public MultipleAcceptStatus() {
+			this.phoneNumbers = new ArrayList<>();
+			this.count = 0;
+		}
+
+		void addNewPhone(String phoneNumber) {
+			this.phoneNumbers.add(phoneNumber);
+			this.count++;
+		}
+
+		public int getCount() {
+			return count;
+		}
+
+		public ArrayList<String> getPhoneNumbers() {
+			return phoneNumbers;
 		}
 	}
 }
