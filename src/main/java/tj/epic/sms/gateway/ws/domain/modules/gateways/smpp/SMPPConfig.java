@@ -27,8 +27,8 @@ public class SMPPConfig {
 		this.queueName = queueName;
 		this.alias = alias;
 
-		if (preFetchCount <= 0) {
-			throw new IllegalArgumentException("Prefetch count must be 1 or greater");
+		if (preFetchCount < 0) {
+			throw new IllegalArgumentException("Prefetch count must be 0 or greater");
 		}
 		this.preFetchCount = preFetchCount;
 

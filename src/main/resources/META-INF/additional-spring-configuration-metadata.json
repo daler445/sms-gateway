@@ -1,9 +1,0 @@
-{
-  "properties": [
-    {
-      "name": "use_database",
-      "type": "java.lang.String",
-      "description": "Save SMS information in databases."
-    }
-  ]
-}

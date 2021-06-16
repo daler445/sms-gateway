@@ -11,7 +11,7 @@ import org.jsmpp.util.InvalidDeliveryReceiptException;
 import org.jsmpp.util.TimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.format.annotation.DateTimeFormat;
+import tj.epic.sms.gateway.ws.application.database.DatabaseOperations;
 import tj.epic.sms.gateway.ws.domain.exceptions.gateway.smpp.BindFailedException;
 import tj.epic.sms.gateway.ws.domain.exceptions.gateway.smpp.SmsSendingFailedException;
 import tj.epic.sms.gateway.ws.domain.modules.gateways.Config;
@@ -24,10 +24,9 @@ import tj.epic.sms.gateway.ws.domain.modules.sms.sender.Sender;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatterBuilder;
 import java.util.Calendar;
 import java.util.Date;
 
@@ -68,7 +67,7 @@ public class InNetworkSmppRepository implements GatewayRepository {
 	}
 
 	@Override
-	public void sendSms(Receiver receiver, Sender sender, MessageBody messageBody, MessagePriority messagePriority, MessageSchedule messageSchedule) throws SmsSendingFailedException {
+	public void sendSms(Receiver receiver, Sender sender, MessageBody messageBody, MessagePriority messagePriority, MessageSchedule messageSchedule, long smsDBItemId) throws SmsSendingFailedException {
 		if (isBound) {
 			String messageId;
 			try {
@@ -99,11 +98,6 @@ public class InNetworkSmppRepository implements GatewayRepository {
 						return null;
 					}
 				});
-
-				Calendar date = Calendar.getInstance();
-				long t = date.getTimeInMillis();
-
-				//Date scheduleDeliveryTime = new Date(t + 3000);
 
 				Date scheduleDate = new Date();
 				if (messageSchedule.isScheduleSending()) {
@@ -150,16 +144,27 @@ public class InNetworkSmppRepository implements GatewayRepository {
 				);
 			} catch (IOException | InvalidResponseException | NegativeResponseException | ResponseTimeoutException | PDUException e) {
 				logger.error("SMS sending failed: " + e.getMessage());
+				updateSMSStatusInDatabase(smsDBItemId, "failed", "");
 				throw new SmsSendingFailedException();
 			}
 			if (messageId == null) {
 				logger.error("Failed to send sms, unexpected response");
+				updateSMSStatusInDatabase(smsDBItemId, "failed", "");
 				throw new SmsSendingFailedException();
 			}
+			updateSMSStatusInDatabase(smsDBItemId, "sent", messageId);
 			logger.info("SMS sent, ID: " + messageId);
 		} else {
 			logger.error("Not bound");
 			throw new SmsSendingFailedException();
+		}
+	}
+
+	private void updateSMSStatusInDatabase(long smsDBItemId, String status, String smsId) {
+		try {
+			DatabaseOperations.updateSMSStatus(smsDBItemId, status, smsId);
+		} catch (SQLException e) {
+			logger.error("Failed updating SMS status in DB",e);
 		}
 	}
 

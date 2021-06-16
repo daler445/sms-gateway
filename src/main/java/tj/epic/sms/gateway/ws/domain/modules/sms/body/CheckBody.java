@@ -15,7 +15,7 @@ public class CheckBody {
 			throw new BodyIsTooBigException();
 		}
 
-		if (!body.matches("^[a-zA-Zа-яА-ЯёЁӢӣҚқӮӯҲҳҶҷҒғ0-9\\-_+%\\\\/–—$#№?* ]+$")) {
+		if (!body.matches("^[a-zA-Zа-яА-ЯёЁӢӣҚқӮӯҲҳҶҷҒғ0-9\\-_+%:\\\\/–—$#№?* ]+$")) {
 			throw new BodyContainsInvalidCharactersException();
 		}
 

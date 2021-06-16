@@ -12,16 +12,18 @@ public class MessageBundle {
 	private MessageBody messageBody;
 	private MessagePriority messagePriority;
 	private MessageSchedule messageSchedule;
+	private long smsId;
 
 	public MessageBundle() {
 	}
 
-	public MessageBundle(Receiver receiver, Sender sender, MessageBody messageBody, MessagePriority messagePriority, MessageSchedule messageSchedule) {
+	public MessageBundle(Receiver receiver, Sender sender, MessageBody messageBody, MessagePriority messagePriority, MessageSchedule messageSchedule, long smsId) {
 		this.receiver = receiver;
 		this.sender = sender;
 		this.messageBody = messageBody;
 		this.messagePriority = messagePriority;
 		this.messageSchedule = messageSchedule;
+		this.smsId = smsId;
 	}
 
 	public Receiver getReceiver() {
@@ -62,5 +64,13 @@ public class MessageBundle {
 
 	public void setMessageSchedule(MessageSchedule messageSchedule) {
 		this.messageSchedule = messageSchedule;
+	}
+
+	public long getSmsId() {
+		return smsId;
+	}
+
+	public void setSmsId(long smsId) {
+		this.smsId = smsId;
 	}
 }

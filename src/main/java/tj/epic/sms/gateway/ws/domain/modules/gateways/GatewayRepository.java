@@ -10,5 +10,5 @@ import tj.epic.sms.gateway.ws.domain.modules.sms.sender.Sender;
 
 public interface GatewayRepository {
 	void bind(Config config) throws BindFailedException;
-	void sendSms(Receiver receiver, Sender sender, MessageBody messageBody, MessagePriority messagePriority, MessageSchedule messageSchedule) throws SmsSendingFailedException;
+	void sendSms(Receiver receiver, Sender sender, MessageBody messageBody, MessagePriority messagePriority, MessageSchedule messageSchedule, long smsDBItemId) throws SmsSendingFailedException;
 }
