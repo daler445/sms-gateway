@@ -62,6 +62,9 @@ public class DatabaseOperations {
 			if (affectedRows == 0) {
 				throw new SQLException("Could not update SMS item");
 			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+			throw new SQLException(e.getMessage());
 		}
 	}
 

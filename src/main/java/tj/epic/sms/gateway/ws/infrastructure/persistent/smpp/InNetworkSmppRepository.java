@@ -27,8 +27,10 @@ import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Random;
 
 public class InNetworkSmppRepository implements GatewayRepository {
 	public Logger logger = LoggerFactory.getLogger(GatewayRepository.class);
@@ -69,7 +71,7 @@ public class InNetworkSmppRepository implements GatewayRepository {
 	@Override
 	public void sendSms(Receiver receiver, Sender sender, MessageBody messageBody, MessagePriority messagePriority, MessageSchedule messageSchedule, long smsDBItemId) throws SmsSendingFailedException {
 		if (isBound) {
-			String messageId;
+			String messageId = null;
 			try {
 
 				session.setMessageReceiverListener(new MessageReceiverListener() {
@@ -105,43 +107,133 @@ public class InNetworkSmppRepository implements GatewayRepository {
 					scheduleDate = Date.from(instant);
 				}
 
-
+				int sequenceSize = 254; // utf 8
 				boolean containsUnicodeCharacters = containsUnicodeCharacters(messageBody.getBody());
 
-				byte[] messageBodyBytes;
-				if (containsUnicodeCharacters) {
-					messageBodyBytes = messageBody.getBody().getBytes(StandardCharsets.UTF_16);
-				} else {
-					messageBodyBytes = messageBody.getBody().getBytes(StandardCharsets.UTF_8);
+				if (containsUnicodeCharacters) { // utf-16
+					sequenceSize = 254 / 4;
 				}
 
-				messageId = session.submitShortMessage(
-						"",
-						this.config.getSmppConfig().getSourceAddrTon().get(),
-						this.config.getSmppConfig().getSourceAddrNpi().get(),
-						sender.getName(),
-						this.config.getSmppConfig().getDestinationAddrTon().get(),
-						this.config.getSmppConfig().getDestinationAddrNpi().get(),
-						receiver.getNumber(),
-						new ESMClass(
-								this.config.getSmppConfig().getESMMessageMode().get(),
-								this.config.getSmppConfig().getESMMessageType().get(),
-								this.config.getSmppConfig().getESMGSMSpecificFeature().get()
-						),
-						(byte) this.config.getSmppConfig().getProtocolId(), // protocol id
-						(byte) messagePriority.getPriorityCode(), // priority
-						(messageSchedule.isScheduleSending()) ? TIME_FORMATTER.format(scheduleDate) : null,
-						//null, //TIME_FORMATTER.format(scheduleDeliveryTime),
+				int segmentCount = 1;
+				if (messageBody.getBody().length() > sequenceSize) {
+					segmentCount = (messageBody.getBody().length() / sequenceSize) + 1;
+				}
 
-						null,
-						new RegisteredDelivery(SMSCDeliveryReceipt.SUCCESS_FAILURE),
-						(this.config.getSmppConfig().isReplacePending()) ? (byte) 1 : (byte) 0, // replace if presents flag
-						new GeneralDataCoding(
-								(containsUnicodeCharacters) ? Alphabet.ALPHA_UCS2 : Alphabet.ALPHA_DEFAULT
-						),
-						(byte) 0, // sms default msg id
-						messageBodyBytes
-				);
+				if (segmentCount == 1) {
+					//boolean containsUnicodeCharacters = containsUnicodeCharacters(messageBody.getBody());
+					byte[] messageBodyBytes;
+					if (containsUnicodeCharacters) {
+						messageBodyBytes = messageBody.getBody().getBytes(StandardCharsets.UTF_16);
+					} else {
+						messageBodyBytes = messageBody.getBody().getBytes(StandardCharsets.UTF_8);
+					}
+
+					messageId = submitSingleOneSequence(
+							session,
+							"",
+							this.config.getSmppConfig().getSourceAddrTon().get(),
+							this.config.getSmppConfig().getSourceAddrNpi().get(),
+							sender.getName(),
+							this.config.getSmppConfig().getDestinationAddrTon().get(),
+							this.config.getSmppConfig().getDestinationAddrNpi().get(),
+							receiver.getNumber(),
+							new ESMClass(
+									this.config.getSmppConfig().getESMMessageMode().get(),
+									this.config.getSmppConfig().getESMMessageType().get(),
+									this.config.getSmppConfig().getESMGSMSpecificFeature().get()
+							),
+							(byte) this.config.getSmppConfig().getProtocolId(), // protocol id
+							(byte) messagePriority.getPriorityCode(), // priority
+							(messageSchedule.isScheduleSending()) ? TIME_FORMATTER.format(scheduleDate) : null,
+							new RegisteredDelivery(SMSCDeliveryReceipt.DEFAULT),
+							(this.config.getSmppConfig().isReplacePending()) ? (byte) 1 : (byte) 0, // replace if presents flag
+							new GeneralDataCoding(
+									(containsUnicodeCharacters) ? Alphabet.ALPHA_UCS2 : Alphabet.ALPHA_DEFAULT
+							),
+							(byte) 0, // sms default msg id
+							messageBodyBytes
+					);
+				} else {
+					Random random = new Random();
+					short seqRefNum = (short)random.nextInt();
+
+					OptionalParameter sarMsgRefNum = OptionalParameters.newSarMsgRefNum(seqRefNum);
+					OptionalParameter sarTotalSegments = OptionalParameters.newSarTotalSegments(segmentCount);
+
+					String[] segmentParts = messageBody.getBody().split("(?<=\\G.{"+sequenceSize+"})");
+
+					for (int i = 0; i < segmentCount; i++) {
+						logger.debug("Segment part "+i+" [Segment "+seqRefNum+"]: " + segmentParts[i]);
+						//boolean containsUnicodeCharacters = containsUnicodeCharacters(segmentParts[i]);
+						byte[] messageBodyBytes;
+						if (containsUnicodeCharacters) {
+							messageBodyBytes = segmentParts[i].getBytes(StandardCharsets.UTF_16);
+						} else {
+							messageBodyBytes = segmentParts[i].getBytes(StandardCharsets.UTF_8);
+						}
+
+						OptionalParameter sarSegmentSeqNum = OptionalParameters.newSarSegmentSeqnum(i + 1);
+						messageId = submitSingleMultipleSequence(
+								session,
+								"",
+								this.config.getSmppConfig().getSourceAddrTon().get(),
+								this.config.getSmppConfig().getSourceAddrNpi().get(),
+								sender.getName(),
+								this.config.getSmppConfig().getDestinationAddrTon().get(),
+								this.config.getSmppConfig().getDestinationAddrNpi().get(),
+								receiver.getNumber(),
+								new ESMClass(
+										this.config.getSmppConfig().getESMMessageMode().get(),
+										this.config.getSmppConfig().getESMMessageType().get(),
+										this.config.getSmppConfig().getESMGSMSpecificFeature().get()
+								),
+								(byte) this.config.getSmppConfig().getProtocolId(), // protocol id
+								(byte) messagePriority.getPriorityCode(), // priority
+								(messageSchedule.isScheduleSending()) ? TIME_FORMATTER.format(scheduleDate) : null,
+								new RegisteredDelivery(SMSCDeliveryReceipt.DEFAULT),
+								(this.config.getSmppConfig().isReplacePending()) ? (byte) 1 : (byte) 0, // replace if presents flag
+								new GeneralDataCoding(
+										(containsUnicodeCharacters) ? Alphabet.ALPHA_UCS2 : Alphabet.ALPHA_DEFAULT
+								),
+								(byte) 0, // sms default msg id
+								messageBodyBytes,
+								sarMsgRefNum,
+								sarSegmentSeqNum,
+								sarTotalSegments
+						);
+					}
+				}
+
+					/*messageId = session.submitShortMessage(
+							"",
+							this.config.getSmppConfig().getSourceAddrTon().get(),
+							this.config.getSmppConfig().getSourceAddrNpi().get(),
+							sender.getName(),
+							this.config.getSmppConfig().getDestinationAddrTon().get(),
+							this.config.getSmppConfig().getDestinationAddrNpi().get(),
+							receiver.getNumber(),
+							new ESMClass(
+									this.config.getSmppConfig().getESMMessageMode().get(),
+									this.config.getSmppConfig().getESMMessageType().get(),
+									this.config.getSmppConfig().getESMGSMSpecificFeature().get()
+							),
+							(byte) this.config.getSmppConfig().getProtocolId(), // protocol id
+							(byte) messagePriority.getPriorityCode(), // priority
+							(messageSchedule.isScheduleSending()) ? TIME_FORMATTER.format(scheduleDate) : null,
+							//null, //TIME_FORMATTER.format(scheduleDeliveryTime),
+
+							null,
+							new RegisteredDelivery(SMSCDeliveryReceipt.SUCCESS_FAILURE),
+							(this.config.getSmppConfig().isReplacePending()) ? (byte) 1 : (byte) 0, // replace if presents flag
+							new GeneralDataCoding(
+									(containsUnicodeCharacters) ? Alphabet.ALPHA_UCS2 : Alphabet.ALPHA_DEFAULT
+							),
+							(byte) 0, // sms default msg id
+							messageBodyBytes,
+							sarMsgRefNum,
+							sarSegmentSeqNum,
+							sarTotalSegments
+					);*/
 			} catch (IOException | InvalidResponseException | NegativeResponseException | ResponseTimeoutException | PDUException e) {
 				logger.error("SMS sending failed: " + e.getMessage());
 				updateSMSStatusInDatabase(smsDBItemId, "failed", "");
@@ -158,6 +250,92 @@ public class InNetworkSmppRepository implements GatewayRepository {
 			logger.error("Not bound");
 			throw new SmsSendingFailedException();
 		}
+	}
+
+	private String submitSingleOneSequence(
+			SMPPSession session,
+			String serviceType,
+			TypeOfNumber sTON,
+			NumberingPlanIndicator sNPI,
+			String sender,
+			TypeOfNumber dTON,
+			NumberingPlanIndicator dNPI,
+			String receiver,
+			ESMClass emsClass,
+			byte protocolId,
+			byte priorityCode,
+			String scheduleDate,
+			RegisteredDelivery registeredDelivery,
+			byte replacePending,
+			GeneralDataCoding generalDataCoding,
+			byte defaultMsgId,
+			byte[] body
+	) throws PDUException, IOException, InvalidResponseException, NegativeResponseException, ResponseTimeoutException {
+		return session.submitShortMessage(
+				serviceType,
+				sTON,
+				sNPI,
+				sender,
+				dTON,
+				dNPI,
+				receiver,
+				emsClass,
+				protocolId, // protocol id
+				priorityCode, // priority
+				scheduleDate,
+				null,
+				registeredDelivery,
+				replacePending, // replace if presents flag
+				generalDataCoding,
+				defaultMsgId, // sms default msg id
+				body
+		);
+	}
+
+	private String submitSingleMultipleSequence(
+			SMPPSession session,
+			String serviceType,
+			TypeOfNumber sTON,
+			NumberingPlanIndicator sNPI,
+			String sender,
+			TypeOfNumber dTON,
+			NumberingPlanIndicator dNPI,
+			String receiver,
+			ESMClass emsClass,
+			byte protocolId,
+			byte priorityCode,
+			String scheduleDate,
+			RegisteredDelivery registeredDelivery,
+			byte replacePending,
+			GeneralDataCoding generalDataCoding,
+			byte defaultMsgId,
+			byte[] body,
+			OptionalParameter sarMsgRefNum,
+			OptionalParameter sarSegmentSeqNum,
+			OptionalParameter sarTotalSegments
+	) throws PDUException, IOException, InvalidResponseException, NegativeResponseException, ResponseTimeoutException {
+		return session.submitShortMessage(
+				serviceType,
+				sTON,
+				sNPI,
+				sender,
+				dTON,
+				dNPI,
+				receiver,
+				emsClass,
+				protocolId, // protocol id
+				priorityCode, // priority
+				scheduleDate,
+				null,
+				registeredDelivery,
+				replacePending, // replace if presents flag
+				generalDataCoding,
+				defaultMsgId, // sms default msg id
+				body,
+				sarMsgRefNum,
+				sarSegmentSeqNum,
+				sarTotalSegments
+		);
 	}
 
 	private void updateSMSStatusInDatabase(long smsDBItemId, String status, String smsId) {

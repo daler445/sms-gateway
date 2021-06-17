@@ -35,7 +35,7 @@ public class Producer {
 			insertId = saveToDatabase(sender.getName(), receiver.getFormattedNumber(), messageBody.getBody(), priority.getPriorityCode(), messageSchedule.dateTime, gateway);
 			logger.info("SMS DB ID: " + insertId);
 		} catch (SQLException e) {
-			e.printStackTrace();
+			logger.error("Could not insert SMS info to database", e);
 		}
 
 		ConnectionFactory factory = new ConnectionFactory();
