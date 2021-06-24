@@ -9,13 +9,16 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import tj.epic.sms.gateway.ws.application.configReader.ReadConfig;
 import tj.epic.sms.gateway.ws.application.queue.Consumer;
+import tj.epic.sms.gateway.ws.domain.exceptions.gateway.smpp.BindFailedException;
 import tj.epic.sms.gateway.ws.domain.modules.gateways.Config;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @SpringBootApplication
 public class Application implements ApplicationRunner {
 	public static Logger logger = LoggerFactory.getLogger(Application.class);
+	public static ArrayList<Config> boundList = new ArrayList<>();
 
 	public static void main(String[] args) {
 		SpringApplication.run(Application.class, args);
@@ -50,7 +53,12 @@ public class Application implements ApplicationRunner {
 		logger.debug(configList.size() + " gateway configs available");
 		Consumer.buildMain(configList);
 		for (Config config : configList) {
-			Consumer.build(config);
+			try {
+				Consumer.build(config);
+				this.boundList.add(config);
+			} catch (BindFailedException e) {
+				logger.error("Could not bind to gateway");
+			}
 		}
 	}
 

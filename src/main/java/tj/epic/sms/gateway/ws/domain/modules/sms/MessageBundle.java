@@ -8,11 +8,13 @@ import tj.epic.sms.gateway.ws.domain.modules.sms.sender.Sender;
 
 public class MessageBundle {
 	private Receiver receiver;
+	private Receiver[] receivers;
 	private Sender sender;
 	private MessageBody messageBody;
 	private MessagePriority messagePriority;
 	private MessageSchedule messageSchedule;
 	private long smsId;
+	private boolean isMultiple = false;
 
 	public MessageBundle() {
 	}
@@ -24,10 +26,25 @@ public class MessageBundle {
 		this.messagePriority = messagePriority;
 		this.messageSchedule = messageSchedule;
 		this.smsId = smsId;
+		isMultiple = false;
+	}
+
+	public MessageBundle(Receiver[] receivers, Sender sender, MessageBody messageBody, MessagePriority messagePriority, MessageSchedule messageSchedule, long smsId) {
+		this.receivers = receivers;
+		this.sender = sender;
+		this.messageBody = messageBody;
+		this.messagePriority = messagePriority;
+		this.messageSchedule = messageSchedule;
+		this.smsId = smsId;
+		isMultiple = true;
 	}
 
 	public Receiver getReceiver() {
 		return receiver;
+	}
+
+	public Receiver[] getReceivers() {
+		return receivers;
 	}
 
 	public Sender getSender() {
@@ -72,5 +89,18 @@ public class MessageBundle {
 
 	public void setSmsId(long smsId) {
 		this.smsId = smsId;
+	}
+
+	public void setReceivers(Receiver[] receivers) {
+		this.receivers = receivers;
+		isMultiple = true;
+	}
+
+	public boolean isMultiple() {
+		return isMultiple;
+	}
+
+	public void setMultiple(boolean multiple) {
+		isMultiple = multiple;
 	}
 }

@@ -14,6 +14,7 @@ import tj.epic.sms.gateway.ws.infrastructure.persistent.smpp.InNetworkSmppReposi
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 
@@ -22,13 +23,15 @@ public class Consumer {
 	public static final String GLOBAL_QUEUE_NAME_LOCAL = "aster";
 	public static final String GLOBAL_QUEUE_NAME_EXTERNAL = "cody";
 
-	public static void build(Config config) {
+	public static void build(Config config) throws BindFailedException {
 		try {
 			declareQueue(config, "");
 		} catch (BindFailedException e) {
 			logger.error("Could not bind [" + getQueueName(config) + "]");
+			throw new BindFailedException();
 		} catch (Exception e) {
 			logger.error("Could not bind [" + getQueueName(config) + "]", e);
+			throw new BindFailedException();
 		}
 	}
 
@@ -95,11 +98,22 @@ public class Consumer {
 				ObjectMapper mapper = new ObjectMapper();
 				MessageBundle bundle = mapper.readValue(message, MessageBundle.class);
 
-				logger.info("[" + finalQueueName + "] [" + getAlias(config) + "] Received message, to '" + bundle.getReceiver().getRawValue() + "', from '" + bundle.getSender().getName() + "', priority " + bundle.getMessagePriority().getPriorityText());
-				try {
-					gatewayRepository.sendSms(bundle.getReceiver(), bundle.getSender(), bundle.getMessageBody(), bundle.getMessagePriority(), bundle.getMessageSchedule(), bundle.getSmsId());
-				} catch (SmsSendingFailedException e) {
-					e.printStackTrace();
+				if (bundle.isMultiple()) {
+					logger.info("[" + finalQueueName + "] [" + getAlias(config) + "] Received message, to '" + Arrays.toString(bundle.getReceivers()) + "', from '" + bundle.getSender().getName() + "', priority " + bundle.getMessagePriority().getPriorityText());
+
+					try {
+						gatewayRepository.sendMultipleSms(bundle.getReceivers(), bundle.getSender(), bundle.getMessageBody(), bundle.getMessagePriority(), bundle.getMessageSchedule(), bundle.getSmsId());
+					} catch (SmsSendingFailedException e) {
+						e.printStackTrace();
+					}
+				} else {
+					logger.info("[" + finalQueueName + "] [" + getAlias(config) + "] Received message, to '" + bundle.getReceiver().getRawValue() + "', from '" + bundle.getSender().getName() + "', priority " + bundle.getMessagePriority().getPriorityText());
+
+					try {
+						gatewayRepository.sendSms(bundle.getReceiver(), bundle.getSender(), bundle.getMessageBody(), bundle.getMessagePriority(), bundle.getMessageSchedule(), bundle.getSmsId());
+					} catch (SmsSendingFailedException e) {
+						e.printStackTrace();
+					}
 				}
 			};
 

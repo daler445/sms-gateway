@@ -46,4 +46,20 @@ public class Helpers {
 		}
 		return null;
 	}
+
+	public static String[][] chunkStringArray(String[] array, int chunkSize) {
+		int numOfChunks = (int) Math.ceil((double)array.length / chunkSize);
+		String[][] output = new String[numOfChunks][];
+
+		for(int i = 0; i < numOfChunks; ++i) {
+			int start = i * chunkSize;
+			int length = Math.min(array.length - start, chunkSize);
+
+			String[] temp = new String[length];
+			System.arraycopy(array, start, temp, 0, length);
+			output[i] = temp;
+		}
+
+		return output;
+	}
 }

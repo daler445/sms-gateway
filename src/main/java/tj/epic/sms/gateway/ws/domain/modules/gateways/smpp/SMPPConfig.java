@@ -22,8 +22,9 @@ public class SMPPConfig {
 	private final TypeOfNumber destinationAddrTon;
 	private final NumberingPlanIndicator destinationAddrNpi;
 	private final boolean replacePending;
+	private final boolean isSubmitMultiAvailable;
 
-	public SMPPConfig(String queueName, String alias, String gatewayType, int preFetchCount, String host, int port, String login, String password, String bindType, String systemType, String ESMMessageMode, String ESMMessageType, String ESMGSMSpecificFeature, int protocolId, String sourceAddrTon, String sourceAddrNpi, String destinationAddrTon, String destinationAddrNpi, boolean replacePending) {
+	public SMPPConfig(String queueName, String alias, String gatewayType, int preFetchCount, String host, int port, String login, String password, String bindType, String systemType, String ESMMessageMode, String ESMMessageType, String ESMGSMSpecificFeature, int protocolId, String sourceAddrTon, String sourceAddrNpi, String destinationAddrTon, String destinationAddrNpi, boolean replacePending, boolean isSubmitMultiAvailable) {
 		this.queueName = queueName;
 		this.alias = alias;
 
@@ -36,6 +37,7 @@ public class SMPPConfig {
 		this.port = port;
 		this.login = login;
 		this.password = password;
+		this.isSubmitMultiAvailable = isSubmitMultiAvailable;
 
 		switch (gatewayType.toLowerCase()) {
 			case "both":
@@ -370,5 +372,9 @@ public class SMPPConfig {
 
 	public GatewayTypes getGatewayType() {
 		return gatewayType;
+	}
+
+	public boolean isSubmitMultiAvailable() {
+		return isSubmitMultiAvailable;
 	}
 }

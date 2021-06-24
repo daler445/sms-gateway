@@ -9,13 +9,17 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import tj.epic.sms.gateway.ws.Application;
 import tj.epic.sms.gateway.ws.application.actions.Action;
 import tj.epic.sms.gateway.ws.application.common.ErrorList;
+import tj.epic.sms.gateway.ws.application.common.Helpers;
 import tj.epic.sms.gateway.ws.application.exceptions.HttpBadRequestException;
 import tj.epic.sms.gateway.ws.application.exceptions.HttpInternalServerErrorException;
 import tj.epic.sms.gateway.ws.application.queue.Consumer;
 import tj.epic.sms.gateway.ws.application.queue.Producer;
 import tj.epic.sms.gateway.ws.domain.exceptions.sms.CouldNotAcceptSmsException;
+import tj.epic.sms.gateway.ws.domain.modules.gateways.Config;
+import tj.epic.sms.gateway.ws.domain.modules.sms.gateway.CheckGateway;
 import tj.epic.sms.gateway.ws.domain.modules.sms.priority.CheckPriority;
 import tj.epic.sms.gateway.ws.domain.modules.sms.priority.MessagePriority;
 import tj.epic.sms.gateway.ws.domain.modules.sms.SmsAcceptStatus;
@@ -38,6 +42,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 
 @RestController
 public class RetrieveSmsAction extends Action {
@@ -99,25 +104,126 @@ public class RetrieveSmsAction extends Action {
 		// remove duplicates
 		phoneNumberList = Arrays.stream(phoneNumberList).distinct().toArray(String[]::new);
 
-		for(String phoneNumber : phoneNumberList) {
-			try {
-				this.action(phoneNumber, senderName, messageBody, gateway, priority, schedule);
-				acceptedStatus.addNewPhone(phoneNumber);
-			} catch (HttpInternalServerErrorException|HttpBadRequestException e) {
-				if (!e.getCode().equals(ErrorList.E0x00000f01.getErrorCode())) {
-					throw new HttpBadRequestException(ErrorList.getErrorFromCode(e.getCode()));
-				}
-				rejectedStatus.addNewPhone(phoneNumber);
-			}
-		}
-
 		HashMap<String, Object> response = new HashMap<>();
 		response.put("sender", senderName);
 		response.put("gateway", gateway);
 		response.put("rejected", rejectedStatus);
 		response.put("accepted", acceptedStatus);
 
+		for(String phoneNumber : phoneNumberList) {
+			acceptedStatus.addNewPhone(phoneNumber);
+		}
+
+		// divides array to chunks with up to 254 elements, submit_multi supports only 254
+		String[][] chunkedPhoneNumberLists = Helpers.chunkStringArray(phoneNumberList, 254);
+		for (String[] chunkedPhoneNumbers : chunkedPhoneNumberLists) {
+			ResponseEntity<JsonNode> actionResponse = this.action(chunkedPhoneNumbers, senderName, messageBody, gateway, priority, schedule);
+		}
+
 		return this.respondWithData(200, response);
+	}
+
+	private ResponseEntity<JsonNode> action(String[] phoneNumberArray, String senderName, String messageBody, String gateway, String priority, String schedule) {
+		if (!gateway.equals(Consumer.GLOBAL_QUEUE_NAME_LOCAL) && !gateway.equals(Consumer.GLOBAL_QUEUE_NAME_EXTERNAL)) {
+			boolean available = CheckGateway.isGatewayAvailable(Application.boundList, gateway);
+			if (available) {
+				logger.info("Gateway available");
+			} else {
+				logger.error("Gateway not available");
+				throw new HttpBadRequestException(ErrorList.E0x00000f09);
+			}
+		}
+
+		List<Receiver> receiversList = new ArrayList<>();
+		StringBuilder receiversStr = new StringBuilder();
+		for(String phoneNumber : phoneNumberArray) {
+			try {
+				receiversList.add(CheckReceiver.parse(phoneNumber));
+				if (receiversStr.toString().length() > 0) {
+					receiversStr.append(",");
+				}
+				receiversStr.append(phoneNumber);
+			} catch (BrokenPhoneNumberException e) {
+				logger.error("Broken phone number: " + phoneNumber);
+				continue;
+			}
+			logger.debug("Phone number " + phoneNumber + " added to receiver list");
+		}
+
+		if (receiversList.size() == 0) {
+			logger.warn("Broken receiver phone number");
+			throw new HttpBadRequestException(ErrorList.E0x00000f01);
+		}
+
+		Receiver[] receivers = receiversList.toArray(Receiver[]::new);
+
+		Sender sender;
+		try {
+			sender = CheckSender.parse(senderName);
+		} catch (BrokenSenderNameException e) {
+			logger.warn("Broken sender name");
+			throw new HttpBadRequestException(ErrorList.E0x00000f02);
+		} catch (SenderNameIsTooSmallException e) {
+			logger.warn("Sender name is too small");
+			throw new HttpBadRequestException(ErrorList.E0x00000f03);
+		} catch (SenderNameIsTooBigException e) {
+			logger.warn("Sender name is too big");
+			throw new HttpBadRequestException(ErrorList.E0x00000f04);
+		}
+
+		MessageBody body;
+		try {
+			body = CheckBody.parse(messageBody);
+		} catch (BodyIsTooSmallException e) {
+			logger.warn("Body is too small");
+			throw new HttpBadRequestException(ErrorList.E0x00000f05);
+		} catch (BodyIsTooBigException e) {
+			logger.warn("Body is too big");
+			throw new HttpBadRequestException(ErrorList.E0x00000f06);
+		} catch (BodyContainsInvalidCharactersException e) {
+			logger.warn("Body contains invalid characters");
+			throw new HttpBadRequestException(ErrorList.E0x00000f07);
+		}
+
+		MessagePriority messagePriority = CheckPriority.parse(priority);
+
+		MessageSchedule messageSchedule = new MessageSchedule("now");
+		try {
+			if (!schedule.equals("now")) {
+				messageSchedule = new MessageSchedule(schedule);
+			}
+		} catch (DateTimeParseException e) {
+			logger.warn("Incorrect date time format for schedule provided, using current time", e);
+		}
+
+		if (CheckGateway.isSubmitMultiAvailable(Application.boundList, gateway)) {
+			try {
+				SmsAcceptStatus responseData = Producer.send(receivers, sender, body, gateway, messagePriority, messageSchedule);
+				logger.info("SMS accepted: From [" + sender.getName() + "] to [" + receiversStr.toString() + "] via [" + gateway + "] priority [" + messagePriority.getPriorityText() + "] on [" + messageSchedule.getDateTime() + "]");
+
+				HashMap<String, Object> response = new HashMap<>();
+				response.put("sms", responseData);
+				return this.respondWithData(200, response);
+			} catch (CouldNotAcceptSmsException e) {
+				logger.error("Could not accept sms: " + e.getMessage());
+				throw new HttpInternalServerErrorException(ErrorList.E0x00000f08);
+			}
+		} else {
+			HashMap<String, Object> response = new HashMap<>();
+			for (Receiver receiver : receivers) {
+				try {
+					SmsAcceptStatus responseData = Producer.send(receiver, sender, body, gateway, messagePriority, messageSchedule);
+					logger.info("SMS accepted: From [" + sender.getName() + "] to [" + receiver.getNumber() + "] via [" + gateway + "] priority [" + messagePriority.getPriorityText() + "] on [" + messageSchedule.getDateTime() + "]");
+
+					response.put("sms", responseData);
+				} catch (CouldNotAcceptSmsException e) {
+					logger.error("Could not accept sms: " + e.getMessage());
+					throw new HttpInternalServerErrorException(ErrorList.E0x00000f08);
+				}
+			}
+			return this.respondWithData(200, response);
+		}
+
 	}
 
 	private ResponseEntity<JsonNode> action(String phoneNumber, String senderName, String messageBody, String gateway, String priority, String schedule) {

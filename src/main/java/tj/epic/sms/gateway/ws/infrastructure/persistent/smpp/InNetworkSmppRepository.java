@@ -70,7 +70,7 @@ public class InNetworkSmppRepository implements GatewayRepository {
 
 	@Override
 	public void sendSms(Receiver receiver, Sender sender, MessageBody messageBody, MessagePriority messagePriority, MessageSchedule messageSchedule, long smsDBItemId) throws SmsSendingFailedException {
-		if (isBound) {
+		if (isBound && session.getSessionState().isBound()) {
 			String messageId = null;
 			try {
 
@@ -155,15 +155,15 @@ public class InNetworkSmppRepository implements GatewayRepository {
 					);
 				} else {
 					Random random = new Random();
-					short seqRefNum = (short)random.nextInt();
+					short seqRefNum = (short) random.nextInt();
 
 					OptionalParameter sarMsgRefNum = OptionalParameters.newSarMsgRefNum(seqRefNum);
 					OptionalParameter sarTotalSegments = OptionalParameters.newSarTotalSegments(segmentCount);
 
-					String[] segmentParts = messageBody.getBody().split("(?<=\\G.{"+sequenceSize+"})");
+					String[] segmentParts = messageBody.getBody().split("(?<=\\G.{" + sequenceSize + "})");
 
 					for (int i = 0; i < segmentCount; i++) {
-						logger.debug("Segment part "+i+" [Segment "+seqRefNum+"]: " + segmentParts[i]);
+						logger.debug("Segment part " + i + " [Segment " + seqRefNum + "]: " + segmentParts[i]);
 						//boolean containsUnicodeCharacters = containsUnicodeCharacters(segmentParts[i]);
 						byte[] messageBodyBytes;
 						if (containsUnicodeCharacters) {
@@ -252,25 +252,169 @@ public class InNetworkSmppRepository implements GatewayRepository {
 		}
 	}
 
-	private String submitSingleOneSequence(
-			SMPPSession session,
-			String serviceType,
-			TypeOfNumber sTON,
-			NumberingPlanIndicator sNPI,
-			String sender,
-			TypeOfNumber dTON,
-			NumberingPlanIndicator dNPI,
-			String receiver,
-			ESMClass emsClass,
-			byte protocolId,
-			byte priorityCode,
-			String scheduleDate,
-			RegisteredDelivery registeredDelivery,
-			byte replacePending,
-			GeneralDataCoding generalDataCoding,
-			byte defaultMsgId,
-			byte[] body
-	) throws PDUException, IOException, InvalidResponseException, NegativeResponseException, ResponseTimeoutException {
+	@Override
+	public void sendMultipleSms(Receiver[] receivers, Sender sender, MessageBody messageBody, MessagePriority messagePriority, MessageSchedule messageSchedule, long smsDBItemId) throws SmsSendingFailedException {
+		if (isBound && session.getSessionState().isBound()) {
+			String messageId = null;
+
+			try {
+				session.setMessageReceiverListener(new MessageReceiverListener() {
+					@Override
+					public void onAcceptDeliverSm(DeliverSm deliverSm) {
+						if (MessageType.SMSC_DEL_RECEIPT.containedIn(deliverSm.getEsmClass())) {
+							try {
+								DeliveryReceipt delReceipt = deliverSm.getShortMessageAsDeliveryReceipt();
+								long id = Long.parseLong(delReceipt.getId());
+								String messageId = Long.toString(id, 16).toUpperCase();
+
+								logger.info("Receiving delivery receipt for message '" + messageId + "' from " + deliverSm.getSourceAddr() + " to " + deliverSm.getDestAddress() + ": " + delReceipt);
+							} catch (InvalidDeliveryReceiptException e) {
+								//logger.warn("Failed getting delivery receipt: " + e.getMessage());
+							}
+						}
+					}
+
+					@Override
+					public void onAcceptAlertNotification(AlertNotification alertNotification) {
+
+					}
+
+					@Override
+					public DataSmResult onAcceptDataSm(DataSm dataSm, Session source) {
+						return null;
+					}
+				});
+
+
+				Date scheduleDate = new Date();
+				if (messageSchedule.isScheduleSending()) {
+					Instant instant = messageSchedule.getDateTimeObj().atZone(ZoneId.systemDefault()).toInstant();
+					scheduleDate = Date.from(instant);
+				}
+
+				int sequenceSize = 254; // utf 8
+				boolean containsUnicodeCharacters = containsUnicodeCharacters(messageBody.getBody());
+
+				if (containsUnicodeCharacters) { // utf-16
+					sequenceSize = 254 / 4;
+				}
+
+				int segmentCount = 1;
+				if (messageBody.getBody().length() > sequenceSize) {
+					segmentCount = (messageBody.getBody().length() / sequenceSize) + 1;
+				}
+
+				String[] receiverArray = new String[receivers.length];
+				int i = 0;
+				for(Receiver receiver : receivers) {
+					receiverArray[i] = receiver.getNumber();
+					i++;
+				}
+
+				if (segmentCount == 1) {
+					//boolean containsUnicodeCharacters = containsUnicodeCharacters(messageBody.getBody());
+					byte[] messageBodyBytes;
+					if (containsUnicodeCharacters) {
+						messageBodyBytes = messageBody.getBody().getBytes(StandardCharsets.UTF_16);
+					} else {
+						messageBodyBytes = messageBody.getBody().getBytes(StandardCharsets.UTF_8);
+					}
+
+
+
+					messageId = submitMultipleOneSequence(session,
+							"",
+							this.config.getSmppConfig().getSourceAddrTon().get(),
+							this.config.getSmppConfig().getSourceAddrNpi().get(),
+							sender.getName(),
+							this.config.getSmppConfig().getDestinationAddrTon().get(),
+							this.config.getSmppConfig().getDestinationAddrNpi().get(),
+							receiverArray,
+							new ESMClass(
+									this.config.getSmppConfig().getESMMessageMode().get(),
+									this.config.getSmppConfig().getESMMessageType().get(),
+									this.config.getSmppConfig().getESMGSMSpecificFeature().get()
+							),
+							(byte) this.config.getSmppConfig().getProtocolId(), // protocol id
+							(byte) messagePriority.getPriorityCode(), // priority
+							(messageSchedule.isScheduleSending()) ? TIME_FORMATTER.format(scheduleDate) : null,
+							new RegisteredDelivery(SMSCDeliveryReceipt.DEFAULT),
+							(this.config.getSmppConfig().isReplacePending()) ? (byte) 1 : (byte) 0, // replace if presents flag
+							new GeneralDataCoding(
+									(containsUnicodeCharacters) ? Alphabet.ALPHA_UCS2 : Alphabet.ALPHA_DEFAULT
+							),
+							(byte) 0, // sms default msg id
+							messageBodyBytes);
+
+				} else {
+					Random random = new Random();
+					short seqRefNum = (short) random.nextInt();
+
+					OptionalParameter sarMsgRefNum = OptionalParameters.newSarMsgRefNum(seqRefNum);
+					OptionalParameter sarTotalSegments = OptionalParameters.newSarTotalSegments(segmentCount);
+
+					String[] segmentParts = messageBody.getBody().split("(?<=\\G.{" + sequenceSize + "})");
+
+					for (int k = 0; k < segmentCount; k++) {
+						logger.debug("Segment part " + k + " [Segment " + seqRefNum + "]: " + segmentParts[k]);
+						//boolean containsUnicodeCharacters = containsUnicodeCharacters(segmentParts[i]);
+						byte[] messageBodyBytes;
+						if (containsUnicodeCharacters) {
+							messageBodyBytes = segmentParts[k].getBytes(StandardCharsets.UTF_16);
+						} else {
+							messageBodyBytes = segmentParts[k].getBytes(StandardCharsets.UTF_8);
+						}
+
+						OptionalParameter sarSegmentSeqNum = OptionalParameters.newSarSegmentSeqnum(k + 1);
+
+						messageId = submitMultipleMultipleSequence(session,
+								"",
+								this.config.getSmppConfig().getSourceAddrTon().get(),
+								this.config.getSmppConfig().getSourceAddrNpi().get(),
+								sender.getName(),
+								this.config.getSmppConfig().getDestinationAddrTon().get(),
+								this.config.getSmppConfig().getDestinationAddrNpi().get(),
+								receiverArray,
+								new ESMClass(
+										this.config.getSmppConfig().getESMMessageMode().get(),
+										this.config.getSmppConfig().getESMMessageType().get(),
+										this.config.getSmppConfig().getESMGSMSpecificFeature().get()
+								),
+								(byte) this.config.getSmppConfig().getProtocolId(), // protocol id
+								(byte) messagePriority.getPriorityCode(), // priority
+								(messageSchedule.isScheduleSending()) ? TIME_FORMATTER.format(scheduleDate) : null,
+								new RegisteredDelivery(SMSCDeliveryReceipt.DEFAULT),
+								(this.config.getSmppConfig().isReplacePending()) ? (byte) 1 : (byte) 0, // replace if presents flag
+								new GeneralDataCoding(
+										(containsUnicodeCharacters) ? Alphabet.ALPHA_UCS2 : Alphabet.ALPHA_DEFAULT
+								),
+								(byte) 0, // sms default msg id
+								messageBodyBytes,
+								sarMsgRefNum,
+								sarSegmentSeqNum,
+								sarTotalSegments);
+					}
+				}
+				if (messageId == null) {
+					logger.error("Failed to send sms, unexpected response");
+					updateSMSStatusInDatabase(smsDBItemId, "failed", "");
+					throw new SmsSendingFailedException();
+				}
+			} catch (IOException | InvalidResponseException | NegativeResponseException | ResponseTimeoutException | PDUException e) {
+				logger.error("SMS sending failed: " + e.getMessage());
+				updateSMSStatusInDatabase(smsDBItemId, "failed", "");
+				throw new SmsSendingFailedException();
+			}
+
+			updateSMSStatusInDatabase(smsDBItemId, "sent", messageId);
+			logger.info("SMS sent, ID: " + messageId);
+		} else {
+			logger.error("Not bound");
+			throw new SmsSendingFailedException();
+		}
+	}
+
+	private String submitSingleOneSequence(SMPPSession session, String serviceType, TypeOfNumber sTON,NumberingPlanIndicator sNPI,String sender,TypeOfNumber dTON,NumberingPlanIndicator dNPI,String receiver,ESMClass emsClass,byte protocolId,byte priorityCode,String scheduleDate,RegisteredDelivery registeredDelivery,byte replacePending,GeneralDataCoding generalDataCoding,byte defaultMsgId,byte[] body) throws PDUException, IOException, InvalidResponseException, NegativeResponseException, ResponseTimeoutException {
 		return session.submitShortMessage(
 				serviceType,
 				sTON,
@@ -292,28 +436,7 @@ public class InNetworkSmppRepository implements GatewayRepository {
 		);
 	}
 
-	private String submitSingleMultipleSequence(
-			SMPPSession session,
-			String serviceType,
-			TypeOfNumber sTON,
-			NumberingPlanIndicator sNPI,
-			String sender,
-			TypeOfNumber dTON,
-			NumberingPlanIndicator dNPI,
-			String receiver,
-			ESMClass emsClass,
-			byte protocolId,
-			byte priorityCode,
-			String scheduleDate,
-			RegisteredDelivery registeredDelivery,
-			byte replacePending,
-			GeneralDataCoding generalDataCoding,
-			byte defaultMsgId,
-			byte[] body,
-			OptionalParameter sarMsgRefNum,
-			OptionalParameter sarSegmentSeqNum,
-			OptionalParameter sarTotalSegments
-	) throws PDUException, IOException, InvalidResponseException, NegativeResponseException, ResponseTimeoutException {
+	private String submitSingleMultipleSequence(SMPPSession session,String serviceType,TypeOfNumber sTON,NumberingPlanIndicator sNPI,String sender,TypeOfNumber dTON,NumberingPlanIndicator dNPI,String receiver,ESMClass emsClass,byte protocolId,byte priorityCode,String scheduleDate,RegisteredDelivery registeredDelivery,byte replacePending,GeneralDataCoding generalDataCoding,byte defaultMsgId,byte[] body,OptionalParameter sarMsgRefNum,OptionalParameter sarSegmentSeqNum,OptionalParameter sarTotalSegments) throws PDUException, IOException, InvalidResponseException, NegativeResponseException, ResponseTimeoutException {
 		return session.submitShortMessage(
 				serviceType,
 				sTON,
@@ -338,11 +461,70 @@ public class InNetworkSmppRepository implements GatewayRepository {
 		);
 	}
 
+	private String submitMultipleOneSequence(SMPPSession session,String serviceType,TypeOfNumber sTON,NumberingPlanIndicator sNPI,String sender,TypeOfNumber dTON,NumberingPlanIndicator dNPI,String[] receivers,ESMClass emsClass,byte protocolId,byte priorityCode,String scheduleDate,RegisteredDelivery registeredDelivery,byte replacePending,GeneralDataCoding generalDataCoding,byte defaultMsgId,byte[] body) throws PDUException, IOException, InvalidResponseException, NegativeResponseException, ResponseTimeoutException {
+
+		Address[] receiverList = new Address[receivers.length];
+		for (int i = 0; i < receivers.length; i++) {
+			receiverList[i] = new Address(dTON, dNPI, receivers[i]);
+		}
+
+		session.setTransactionTimer(10000);
+
+		SubmitMultiResult result = session.submitMultiple(
+				serviceType,
+				sTON,
+				sNPI,
+				sender,
+				receiverList,
+				emsClass,
+				protocolId, // protocol id
+				priorityCode, // priority
+				scheduleDate,
+				null,
+				registeredDelivery,
+				new ReplaceIfPresentFlag(replacePending), // replace if presents flag
+				generalDataCoding,
+				defaultMsgId, // sms default msg id
+				body
+		);
+		return result.getMessageId();
+	}
+
+	private String submitMultipleMultipleSequence(SMPPSession session,String serviceType,TypeOfNumber sTON,NumberingPlanIndicator sNPI,String sender,TypeOfNumber dTON,NumberingPlanIndicator dNPI,String[] receivers,ESMClass emsClass,byte protocolId,byte priorityCode,String scheduleDate,RegisteredDelivery registeredDelivery,byte replacePending,GeneralDataCoding generalDataCoding,byte defaultMsgId,byte[] body, OptionalParameter sarMsgRefNum,OptionalParameter sarSegmentSeqNum,OptionalParameter sarTotalSegments) throws PDUException, IOException, InvalidResponseException, NegativeResponseException, ResponseTimeoutException {
+
+		Address[] receiverList = new Address[receivers.length];
+		for (int i = 0; i < receivers.length; i++) {
+			receiverList[i + 1] = new Address(dTON, dNPI, receivers[i]);
+		}
+
+		SubmitMultiResult result = session.submitMultiple(
+				serviceType,
+				sTON,
+				sNPI,
+				sender,
+				receiverList,
+				emsClass,
+				protocolId, // protocol id
+				priorityCode, // priority
+				scheduleDate,
+				null,
+				registeredDelivery,
+				new ReplaceIfPresentFlag(replacePending), // replace if presents flag
+				generalDataCoding,
+				defaultMsgId, // sms default msg id
+				body,
+				sarMsgRefNum,
+				sarSegmentSeqNum,
+				sarTotalSegments
+		);
+		return result.getMessageId();
+	}
+
 	private void updateSMSStatusInDatabase(long smsDBItemId, String status, String smsId) {
 		try {
 			DatabaseOperations.updateSMSStatus(smsDBItemId, status, smsId);
 		} catch (SQLException e) {
-			logger.error("Failed updating SMS status in DB",e);
+			logger.error("Failed updating SMS status in DB", e);
 		}
 	}
 

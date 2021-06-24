@@ -70,7 +70,8 @@ public class ReadConfig {
 						node.getString("sourceAddrNpi"),
 						node.getString("destinationAddrTon"),
 						node.getString("destinationAddrNpi"),
-						node.getBoolean("replacePending")
+						node.getBoolean("replacePending"),
+						node.getBoolean("isSubmitMultiAvailable")
 				);
 				Config configObj = new Config(Config.ConfigType.SMPP, smppConfig);
 				configList.add(configObj);

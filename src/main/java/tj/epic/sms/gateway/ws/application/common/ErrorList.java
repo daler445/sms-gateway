@@ -10,6 +10,7 @@ public enum ErrorList {
 	E0x00000f06("0x00000f06", "Body must be less than 2500 characters"),
 	E0x00000f07("0x00000f07", "Body contains invalid characters"),
 	E0x00000f08("0x00000f08", "Could not accept sms"),
+	E0x00000f09("0x00000f09", "SMS gateway is not available"),
 	;
 
 	private final String errorCode;
