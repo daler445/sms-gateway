@@ -1,5 +1,7 @@
 package tj.epic.sms.gateway.ws.infrastructure.persistent.smpp;
 
+import com.google.common.base.Splitter;
+import com.google.common.collect.Iterables;
 import org.jsmpp.InvalidResponseException;
 import org.jsmpp.PDUException;
 import org.jsmpp.bean.*;
@@ -11,6 +13,7 @@ import org.jsmpp.util.InvalidDeliveryReceiptException;
 import org.jsmpp.util.TimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tj.epic.sms.gateway.ws.application.common.Helpers;
 import tj.epic.sms.gateway.ws.application.database.DatabaseOperations;
 import tj.epic.sms.gateway.ws.domain.exceptions.gateway.smpp.BindFailedException;
 import tj.epic.sms.gateway.ws.domain.exceptions.gateway.smpp.SmsSendingFailedException;
@@ -111,7 +114,7 @@ public class InNetworkSmppRepository implements GatewayRepository {
 				boolean containsUnicodeCharacters = containsUnicodeCharacters(messageBody.getBody());
 
 				if (containsUnicodeCharacters) { // utf-16
-					sequenceSize = 254 / 4;
+					sequenceSize = 254 / 8;
 				}
 
 				int segmentCount = 1;
@@ -160,7 +163,12 @@ public class InNetworkSmppRepository implements GatewayRepository {
 					OptionalParameter sarMsgRefNum = OptionalParameters.newSarMsgRefNum(seqRefNum);
 					OptionalParameter sarTotalSegments = OptionalParameters.newSarTotalSegments(segmentCount);
 
-					String[] segmentParts = messageBody.getBody().split("(?<=\\G.{" + sequenceSize + "})");
+					String[] segmentParts = Iterables.toArray(
+							Splitter
+									.fixedLength(sequenceSize)
+									.split(messageBody.getBody()),
+							String.class
+					);
 
 					for (int i = 0; i < segmentCount; i++) {
 						logger.debug("Segment part " + i + " [Segment " + seqRefNum + "]: " + segmentParts[i]);
@@ -306,7 +314,7 @@ public class InNetworkSmppRepository implements GatewayRepository {
 
 				String[] receiverArray = new String[receivers.length];
 				int i = 0;
-				for(Receiver receiver : receivers) {
+				for (Receiver receiver : receivers) {
 					receiverArray[i] = receiver.getNumber();
 					i++;
 				}
@@ -319,7 +327,6 @@ public class InNetworkSmppRepository implements GatewayRepository {
 					} else {
 						messageBodyBytes = messageBody.getBody().getBytes(StandardCharsets.UTF_8);
 					}
-
 
 
 					messageId = submitMultipleOneSequence(session,
@@ -353,7 +360,12 @@ public class InNetworkSmppRepository implements GatewayRepository {
 					OptionalParameter sarMsgRefNum = OptionalParameters.newSarMsgRefNum(seqRefNum);
 					OptionalParameter sarTotalSegments = OptionalParameters.newSarTotalSegments(segmentCount);
 
-					String[] segmentParts = messageBody.getBody().split("(?<=\\G.{" + sequenceSize + "})");
+					String[] segmentParts = Iterables.toArray(
+							Splitter
+									.fixedLength(sequenceSize)
+									.split(messageBody.getBody()),
+							String.class
+					);
 
 					for (int k = 0; k < segmentCount; k++) {
 						logger.debug("Segment part " + k + " [Segment " + seqRefNum + "]: " + segmentParts[k]);
@@ -414,7 +426,7 @@ public class InNetworkSmppRepository implements GatewayRepository {
 		}
 	}
 
-	private String submitSingleOneSequence(SMPPSession session, String serviceType, TypeOfNumber sTON,NumberingPlanIndicator sNPI,String sender,TypeOfNumber dTON,NumberingPlanIndicator dNPI,String receiver,ESMClass emsClass,byte protocolId,byte priorityCode,String scheduleDate,RegisteredDelivery registeredDelivery,byte replacePending,GeneralDataCoding generalDataCoding,byte defaultMsgId,byte[] body) throws PDUException, IOException, InvalidResponseException, NegativeResponseException, ResponseTimeoutException {
+	private String submitSingleOneSequence(SMPPSession session, String serviceType, TypeOfNumber sTON, NumberingPlanIndicator sNPI, String sender, TypeOfNumber dTON, NumberingPlanIndicator dNPI, String receiver, ESMClass emsClass, byte protocolId, byte priorityCode, String scheduleDate, RegisteredDelivery registeredDelivery, byte replacePending, GeneralDataCoding generalDataCoding, byte defaultMsgId, byte[] body) throws PDUException, IOException, InvalidResponseException, NegativeResponseException, ResponseTimeoutException {
 		return session.submitShortMessage(
 				serviceType,
 				sTON,
@@ -436,7 +448,7 @@ public class InNetworkSmppRepository implements GatewayRepository {
 		);
 	}
 
-	private String submitSingleMultipleSequence(SMPPSession session,String serviceType,TypeOfNumber sTON,NumberingPlanIndicator sNPI,String sender,TypeOfNumber dTON,NumberingPlanIndicator dNPI,String receiver,ESMClass emsClass,byte protocolId,byte priorityCode,String scheduleDate,RegisteredDelivery registeredDelivery,byte replacePending,GeneralDataCoding generalDataCoding,byte defaultMsgId,byte[] body,OptionalParameter sarMsgRefNum,OptionalParameter sarSegmentSeqNum,OptionalParameter sarTotalSegments) throws PDUException, IOException, InvalidResponseException, NegativeResponseException, ResponseTimeoutException {
+	private String submitSingleMultipleSequence(SMPPSession session, String serviceType, TypeOfNumber sTON, NumberingPlanIndicator sNPI, String sender, TypeOfNumber dTON, NumberingPlanIndicator dNPI, String receiver, ESMClass emsClass, byte protocolId, byte priorityCode, String scheduleDate, RegisteredDelivery registeredDelivery, byte replacePending, GeneralDataCoding generalDataCoding, byte defaultMsgId, byte[] body, OptionalParameter sarMsgRefNum, OptionalParameter sarSegmentSeqNum, OptionalParameter sarTotalSegments) throws PDUException, IOException, InvalidResponseException, NegativeResponseException, ResponseTimeoutException {
 		return session.submitShortMessage(
 				serviceType,
 				sTON,
@@ -461,7 +473,7 @@ public class InNetworkSmppRepository implements GatewayRepository {
 		);
 	}
 
-	private String submitMultipleOneSequence(SMPPSession session,String serviceType,TypeOfNumber sTON,NumberingPlanIndicator sNPI,String sender,TypeOfNumber dTON,NumberingPlanIndicator dNPI,String[] receivers,ESMClass emsClass,byte protocolId,byte priorityCode,String scheduleDate,RegisteredDelivery registeredDelivery,byte replacePending,GeneralDataCoding generalDataCoding,byte defaultMsgId,byte[] body) throws PDUException, IOException, InvalidResponseException, NegativeResponseException, ResponseTimeoutException {
+	private String submitMultipleOneSequence(SMPPSession session, String serviceType, TypeOfNumber sTON, NumberingPlanIndicator sNPI, String sender, TypeOfNumber dTON, NumberingPlanIndicator dNPI, String[] receivers, ESMClass emsClass, byte protocolId, byte priorityCode, String scheduleDate, RegisteredDelivery registeredDelivery, byte replacePending, GeneralDataCoding generalDataCoding, byte defaultMsgId, byte[] body) throws PDUException, IOException, InvalidResponseException, NegativeResponseException, ResponseTimeoutException {
 
 		Address[] receiverList = new Address[receivers.length];
 		for (int i = 0; i < receivers.length; i++) {
@@ -490,7 +502,7 @@ public class InNetworkSmppRepository implements GatewayRepository {
 		return result.getMessageId();
 	}
 
-	private String submitMultipleMultipleSequence(SMPPSession session,String serviceType,TypeOfNumber sTON,NumberingPlanIndicator sNPI,String sender,TypeOfNumber dTON,NumberingPlanIndicator dNPI,String[] receivers,ESMClass emsClass,byte protocolId,byte priorityCode,String scheduleDate,RegisteredDelivery registeredDelivery,byte replacePending,GeneralDataCoding generalDataCoding,byte defaultMsgId,byte[] body, OptionalParameter sarMsgRefNum,OptionalParameter sarSegmentSeqNum,OptionalParameter sarTotalSegments) throws PDUException, IOException, InvalidResponseException, NegativeResponseException, ResponseTimeoutException {
+	private String submitMultipleMultipleSequence(SMPPSession session, String serviceType, TypeOfNumber sTON, NumberingPlanIndicator sNPI, String sender, TypeOfNumber dTON, NumberingPlanIndicator dNPI, String[] receivers, ESMClass emsClass, byte protocolId, byte priorityCode, String scheduleDate, RegisteredDelivery registeredDelivery, byte replacePending, GeneralDataCoding generalDataCoding, byte defaultMsgId, byte[] body, OptionalParameter sarMsgRefNum, OptionalParameter sarSegmentSeqNum, OptionalParameter sarTotalSegments) throws PDUException, IOException, InvalidResponseException, NegativeResponseException, ResponseTimeoutException {
 
 		Address[] receiverList = new Address[receivers.length];
 		for (int i = 0; i < receivers.length; i++) {

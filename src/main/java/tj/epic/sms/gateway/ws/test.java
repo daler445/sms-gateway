@@ -42,7 +42,6 @@ public class test {
 		return output;
 	}
 
-
 	public static String convertBytesToHexString(byte[] data, int offset, int length) {
 		return convertBytesToHexString(data, offset, length, "");
 	}
